@@ -1,24 +1,16 @@
 /**
- * GOOGLE APPS SCRIPT WEBHOOK NHẬN DỮ LIỆU ĐIỂM DANH
- * =================================================
- * Hướng dẫn cài đặt vào Google Sheets:
- * 1. Mở trang tính Google Sheets của bạn.
- * 2. Trên thanh menu, chọn: Tiện ích mở rộng (Extensions) -> Apps Script.
- * 3. Xóa hết mã mặc định trong tệp Code.gs, dán toàn bộ nội dung file này vào.
- * 4. Nhấn nút "Triển khai" (Deploy) góc trên bên phải -> "Tùy chọn triển khai mới" (New deployment).
- * 5. Chọn loại: "Ứng dụng web" (Web app).
- *    - Mô tả: Webhook Điểm Danh GPS
- *    - Thực thi dưới dạng (Execute as): Tôi (tài khoản của bạn / Me)
- *    - Ai có quyền truy cập (Who has access): BẤT KỲ AI (Anyone)  <--- Cực kỳ quan trọng!
- * 6. Nhấn "Triển khai" (Deploy), cấp quyền truy cập tài khoản Google khi được hỏi.
- * 7. Sao chép URL Ứng dụng web (kết thúc bằng /exec) và dán vào file config.js (GOOGLE_SCRIPT_WEBHOOK_URL).
+ * GOOGLE APPS SCRIPT WEBHOOK NHẬN DỮ LIỆU ĐIỂM DANH (CẬP NHẬT MỚI)
+ * ================================================================
+ * TÍNH NĂNG MỚI:
+ * 1. Chống điểm danh hộ qua Device Fingerprint (Mã thiết bị).
+ * 2. Tự động phát hiện và cảnh báo đỏ nếu 1 điện thoại điểm danh cho 2 người khác nhau trong cùng ngày.
+ * 3. Hỗ trợ điểm danh "Có mặt" hoặc "Vắng có lý do" (kèm nội dung lý do).
+ * 4. Trường thông tin: Họ và tên, Đơn vị, Ngày điểm danh.
  */
 
-// Xử lý yêu cầu POST từ trình duyệt web
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  // Khóa script tối đa 10 giây để tránh xung đột dữ liệu khi nhiều học viên bấm cùng lúc
-  lock.tryLock(10000);
+  lock.tryLock(10000); // Khóa chống nghẽn khi nhiều người gửi cùng lúc
 
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -39,96 +31,135 @@ function doPost(e) {
       data = e.parameter;
     }
 
-    // Thời gian điểm danh định dạng theo giờ Việt Nam
-    var formattedDate = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
-
-    var mssv = data.mssv || "";
-    var hoTen = data.hoTen || "";
-    var lop = data.lop || data.session || "Mặc định";
-    var distance = data.distance ? parseFloat(data.distance).toFixed(1) : "";
+    var formattedSubmitTime = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
+    var hoTen = (data.hoTen || "").trim();
+    var donVi = (data.donVi || "").trim();
+    var attendanceDate = (data.attendanceDate || Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy")).trim();
+    var status = data.status || "Có mặt"; // "Có mặt" hoặc "Vắng có lý do"
+    var absentReason = (data.absentReason || "").trim();
+    var deviceId = (data.deviceId || "").trim();
+    var distance = data.distance ? parseFloat(data.distance).toFixed(1) : (status === "Vắng có lý do" ? "N/A" : "");
     var latitude = data.latitude || "";
     var longitude = data.longitude || "";
     var accuracy = data.accuracy ? parseFloat(data.accuracy).toFixed(1) : "";
     var userAgent = data.userAgent || "";
 
-    // Ghi dữ liệu vào hàng tiếp theo
+    // KIỂM TRA CHỐNG ĐIỂM DANH HỘ (DEVICE FINGERPRINT CHECK)
+    var fraudWarning = "Hợp lệ (1 máy/1 người)";
+    var isDuplicateDevice = false;
+
+    if (deviceId && sheet.getLastRow() > 1) {
+      var allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+      for (var i = 0; i < allData.length; i++) {
+        var rowDate = String(allData[i][3]); // Cột 4: Ngày điểm danh
+        var rowName = String(allData[i][1]); // Cột 2: Họ và tên
+        var rowDeviceId = String(allData[i][7]); // Cột 8: Mã thiết bị
+
+        // Nếu trùng DeviceId và cùng Ngày, nhưng tên người khác nhau
+        if (rowDeviceId === deviceId && rowDate === attendanceDate && rowName.toLowerCase() !== hoTen.toLowerCase()) {
+          fraudWarning = "⚠️ CẢNH BÁO: Trùng thiết bị với " + rowName;
+          isDuplicateDevice = true;
+          break;
+        }
+      }
+    }
+
+    // Ghi dữ liệu vào hàng mới
     sheet.appendRow([
-      formattedDate,
-      mssv,
-      hoTen,
-      lop,
-      distance,
-      latitude,
-      longitude,
-      accuracy,
-      userAgent
+      formattedSubmitTime, // Cột 1
+      hoTen,               // Cột 2
+      donVi,               // Cột 3
+      attendanceDate,      // Cột 4
+      status,              // Cột 5
+      absentReason,        // Cột 6
+      distance,            // Cột 7
+      deviceId,            // Cột 8
+      fraudWarning,        // Cột 9
+      latitude ? (latitude + ", " + longitude) : "", // Cột 10
+      accuracy,            // Cột 11
+      userAgent            // Cột 12
     ]);
 
-    // Định dạng lại các ô vừa thêm (căn giữa cột thời gian & MSSV)
     var lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow, 1, 1, 9).setVerticalAlignment("middle");
+    
+    // Căn giữa các cột thông tin chính
     sheet.getRange(lastRow, 1).setHorizontalAlignment("center");
-    sheet.getRange(lastRow, 2).setHorizontalAlignment("center");
+    sheet.getRange(lastRow, 3).setHorizontalAlignment("center");
     sheet.getRange(lastRow, 4).setHorizontalAlignment("center");
     sheet.getRange(lastRow, 5).setHorizontalAlignment("center");
+    sheet.getRange(lastRow, 7).setHorizontalAlignment("center");
+    sheet.getRange(lastRow, 8).setHorizontalAlignment("center");
+
+    // Định dạng màu cho Trạng thái
+    var statusCell = sheet.getRange(lastRow, 5);
+    if (status === "Có mặt") {
+      statusCell.setFontColor("#15803d").setFontWeight("bold");
+    } else {
+      statusCell.setFontColor("#b45309").setFontWeight("bold");
+    }
+
+    // Nếu phát hiện trùng lặp thiết bị -> Tô đỏ cảnh báo hàng đó
+    var warningCell = sheet.getRange(lastRow, 9);
+    if (isDuplicateDevice) {
+      warningCell.setBackground("#fee2e2").setFontColor("#b91c1c").setFontWeight("bold");
+    } else {
+      warningCell.setFontColor("#15803d");
+    }
 
     var response = {
       status: "success",
       message: "Điểm danh thành công!",
-      timestamp: formattedDate,
-      data: { mssv: mssv, hoTen: hoTen }
+      timestamp: formattedSubmitTime,
+      isDuplicateDevice: isDuplicateDevice
     };
 
     return ContentService.createTextOutput(JSON.stringify(response))
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
-    var errorResponse = {
+    return ContentService.createTextOutput(JSON.stringify({
       status: "error",
       message: error.toString()
-    };
-    return ContentService.createTextOutput(JSON.stringify(errorResponse))
-      .setMimeType(ContentService.MimeType.JSON);
+    })).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
 }
 
-// Xử lý yêu cầu GET (dùng để test webhook hoặc fallback)
 function doGet(e) {
-  if (e && e.parameter && e.parameter.mssv) {
+  if (e && e.parameter && (e.parameter.hoTen || e.parameter.donVi)) {
     return doPost(e);
   }
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
-    message: "Google Apps Script Điểm Danh đang hoạt động bình thường!"
+    message: "Google Apps Script Điểm Danh đang chạy bình thường!"
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Hàm khởi tạo tiêu đề cột
+// Khởi tạo hàng tiêu đề bảng tính
 function initHeader(sheet) {
   var headers = [
-    "Thời gian",
-    "Mã sinh viên",
+    "Thời gian gửi",
     "Họ và tên",
-    "Lớp / Buổi học",
+    "Đơn vị",
+    "Ngày điểm danh",
+    "Trạng thái",
+    "Lý do vắng mặt (nếu có)",
     "Khoảng cách (m)",
-    "Vĩ độ (Lat)",
-    "Kinh độ (Lng)",
+    "Mã thiết bị (Device ID)",
+    "Cảnh báo trùng lặp thiết bị",
+    "Tọa độ GPS (Lat, Lng)",
     "Sai số GPS (m)",
     "Thiết bị / Trình duyệt"
   ];
   sheet.appendRow(headers);
 
-  // Định dạng hàng tiêu đề: In đậm, nền xanh lá đậm, chữ trắng
   var headerRange = sheet.getRange(1, 1, 1, headers.length);
   headerRange.setFontWeight("bold");
-  headerRange.setBackground("#1e7e34");
+  headerRange.setBackground("#047857");
   headerRange.setFontColor("#ffffff");
   headerRange.setHorizontalAlignment("center");
   headerRange.setVerticalAlignment("middle");
-  sheet.setRowHeight(1, 35);
-  
-  // Cố định hàng đầu tiên
+  sheet.setRowHeight(1, 38);
   sheet.setFrozenRows(1);
 }

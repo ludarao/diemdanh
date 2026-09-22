@@ -1,36 +1,24 @@
 /**
- * APP ĐIỂM DANH GPS - LOGIC CHÍNH
+ * APP ĐIỂM DANH GPS & NHẬN DIỆN THIẾT BỊ (ANTI-PROXY)
  */
 
 (function () {
   "use strict";
 
-  // Lấy cấu hình từ config.js hoặc mặc định
   const config = window.APP_CONFIG || {
     CLASSROOM_LAT: 21.028511,
     CLASSROOM_LNG: 105.854444,
     ALLOWED_RADIUS_METERS: 40,
     MAX_GPS_ACCURACY_METERS: 80,
     GOOGLE_SCRIPT_WEBHOOK_URL: "",
-    STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V1"
+    STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V2",
+    LOCK_STORAGE_KEY: "ATTENDANCE_DEVICE_LOCK_V2"
   };
 
-  // Kiểm tra nếu giảng viên đã lưu tọa độ ghi đè trong LocalStorage của máy này
-  const savedRoomCoords = localStorage.getItem("OVERRIDE_ROOM_COORDS");
-  if (savedRoomCoords) {
-    try {
-      const parsed = JSON.parse(savedRoomCoords);
-      if (parsed.lat && parsed.lng) {
-        config.CLASSROOM_LAT = parsed.lat;
-        config.CLASSROOM_LNG = parsed.lng;
-        config.ALLOWED_RADIUS_METERS = parsed.radius || config.ALLOWED_RADIUS_METERS;
-      }
-    } catch (e) {
-      console.warn("Không đọc được tọa độ lưu tạm:", e);
-    }
-  }
+  // Trạng thái hiện tại
+  let currentStatus = "Có mặt"; // "Có mặt" hoặc "Vắng có lý do"
+  let currentDeviceId = "";
 
-  // Biến lưu trạng thái GPS người dùng hiện tại
   let currentUserLocation = {
     lat: null,
     lng: null,
@@ -42,36 +30,63 @@
   // DOM Elements
   const appTitleEl = document.getElementById("appTitle");
   const appSubtitleEl = document.getElementById("appSubtitle");
+  const labelStatusPresent = document.getElementById("labelStatusPresent");
+  const labelStatusAbsent = document.getElementById("labelStatusAbsent");
+  const radioStatusInputs = document.querySelectorAll('input[name="attendanceStatus"]');
+  const absentReasonGroup = document.getElementById("absentReasonGroup");
+  const absentReasonInput = document.getElementById("absentReason");
+
   const gpsStatusBox = document.getElementById("gpsStatusBox");
   const gpsStatusText = document.getElementById("gpsStatusText");
   const gpsDetailText = document.getElementById("gpsDetailText");
   const btnRefreshGps = document.getElementById("btnRefreshGps");
+
   const attendanceForm = document.getElementById("attendanceForm");
-  const studentIdInput = document.getElementById("studentId");
   const fullNameInput = document.getElementById("fullName");
-  const sessionNameInput = document.getElementById("sessionName");
+  const donViInput = document.getElementById("donVi");
+  const attendanceDateInput = document.getElementById("attendanceDate");
+  const displayDeviceId = document.getElementById("displayDeviceId");
+
   const btnSubmit = document.getElementById("btnSubmit");
   const btnSubmitText = document.getElementById("btnSubmitText");
   const btnSpinner = document.getElementById("btnSpinner");
-  const successScreen = document.getElementById("successScreen");
-  const btnCheckAgain = document.getElementById("btnCheckAgain");
 
-  // Receipt elements
+  // Success Screen
+  const successScreen = document.getElementById("successScreen");
+  const successTitle = document.getElementById("successTitle");
+  const successSubtitle = document.getElementById("successSubtitle");
+  const successIconWrap = document.getElementById("successIconWrap");
   const receiptName = document.getElementById("receiptName");
-  const receiptMssv = document.getElementById("receiptMssv");
-  const receiptDistance = document.getElementById("receiptDistance");
+  const receiptDonVi = document.getElementById("receiptDonVi");
+  const receiptDate = document.getElementById("receiptDate");
+  const receiptStatus = document.getElementById("receiptStatus");
+  const receiptReasonRow = document.getElementById("receiptReasonRow");
+  const receiptReason = document.getElementById("receiptReason");
+  const receiptDeviceId = document.getElementById("receiptDeviceId");
   const receiptTime = document.getElementById("receiptTime");
 
   // 1. Khởi tạo ứng dụng
-  function init() {
+  async function init() {
     if (config.APP_TITLE && appTitleEl) appTitleEl.textContent = config.APP_TITLE;
     if (config.SUB_TITLE && appSubtitleEl) appSubtitleEl.textContent = config.SUB_TITLE;
 
-    // Đọc URL query params (ví dụ: ?session=Buoi1&class=LLCT01)
-    parseUrlParams();
+    // Thiết lập ngày hôm nay làm mặc định (định dạng YYYY-MM-DD cho input date)
+    initTodayDate();
 
-    // Khôi phục thông tin sinh viên đã lưu từ lần trước
-    restoreSavedStudentInfo();
+    // Tạo mã nhận diện phần cứng thiết bị (Device Fingerprint)
+    currentDeviceId = await getOrCreateDeviceFingerprint();
+    if (displayDeviceId) {
+      displayDeviceId.textContent = currentDeviceId;
+    }
+
+    // Khôi phục họ tên & đơn vị đã lưu từ lần trước
+    restoreSavedInfo();
+
+    // Kiểm tra xem máy này hôm nay đã điểm danh chưa
+    checkDeviceLockToday();
+
+    // Thiết lập sự kiện chuyển đổi Có mặt / Vắng
+    setupStatusSwitcher();
 
     // Bắt đầu quét GPS
     requestGpsLocation();
@@ -79,53 +94,146 @@
     // Gán sự kiện
     btnRefreshGps.addEventListener("click", () => requestGpsLocation(true));
     attendanceForm.addEventListener("submit", handleFormSubmit);
-    btnCheckAgain.addEventListener("click", resetFormForNewStudent);
   }
 
-  // Đọc query parameters từ URL
-  function parseUrlParams() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const session = urlParams.get("session") || urlParams.get("buoi");
-    const className = urlParams.get("class") || urlParams.get("lop");
+  // Khởi tạo ngày mặc định là hôm nay
+  function initTodayDate() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    attendanceDateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
 
-    if (session || className) {
-      const combined = [session, className].filter(Boolean).join(" - ");
-      sessionNameInput.value = combined;
-      sessionNameInput.readOnly = true;
-      const hint = document.getElementById("sessionHint");
-      if (hint) hint.textContent = "✓ Tự động nhận diện từ mã QR của buổi học";
+  // Định dạng ngày hiển thị dd/MM/yyyy
+  function formatDateVN(dateStr) {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
+    return dateStr;
   }
 
-  // Khôi phục thông tin từ LocalStorage
-  function restoreSavedStudentInfo() {
-    try {
-      const saved = localStorage.getItem(config.STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.mssv) studentIdInput.value = parsed.mssv;
-        if (parsed.hoTen) fullNameInput.value = parsed.hoTen;
-      }
-    } catch (e) {
-      console.warn("Không đọc được LocalStorage:", e);
+  // 2. Tạo Device Fingerprint độc nhất cho từng thiết bị
+  async function getOrCreateDeviceFingerprint() {
+    const storageKey = "DEVICE_PERMANENT_ID_V2";
+    let savedId = localStorage.getItem(storageKey);
+    if (savedId) {
+      return savedId;
     }
-  }
 
-  // Lưu thông tin vào LocalStorage
-  function saveStudentInfo(mssv, hoTen) {
+    // Thu thập các thông số phần cứng đặc trưng
+    const components = [
+      navigator.userAgent,
+      screen.width + "x" + screen.height + "x" + screen.colorDepth,
+      window.devicePixelRatio || 1,
+      navigator.language || "",
+      navigator.hardwareConcurrency || 2,
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+      navigator.maxTouchPoints || 0,
+      getCanvasHash()
+    ];
+
+    const rawString = components.join("###");
+    const hash = simpleHash(rawString);
+    const newId = "DEV-" + hash.toUpperCase();
+
     try {
-      localStorage.setItem(
-        config.STORAGE_KEY,
-        JSON.stringify({ mssv: mssv.trim(), hoTen: hoTen.trim(), lastUpdate: Date.now() })
-      );
+      localStorage.setItem(storageKey, newId);
     } catch (e) {
       console.warn("Không thể lưu LocalStorage:", e);
     }
+
+    return newId;
   }
 
-  // 2. Tính khoảng cách Haversine giữa 2 tọa độ (mét)
+  // Thuật toán băm Canvas Fingerprint
+  function getCanvasHash() {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 160;
+      canvas.height = 40;
+      const ctx = canvas.getContext("2d");
+      ctx.textBaseline = "top";
+      ctx.font = "14px 'Arial'";
+      ctx.fillStyle = "#f60";
+      ctx.fillRect(100, 1, 50, 18);
+      ctx.fillStyle = "#069";
+      ctx.fillText("ATTEND_GPS", 2, 12);
+      return canvas.toDataURL().slice(-40);
+    } catch (e) {
+      return "no_canvas";
+    }
+  }
+
+  // Hàm băm FNV-1a tạo chuỗi hash ngắn 8 ký tự
+  function simpleHash(str) {
+    let hash = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      hash ^= str.charCodeAt(i);
+      hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }
+
+  // Kiểm tra khóa thiết bị (chống dùng 1 máy điểm danh nhiều lần trong ngày)
+  function checkDeviceLockToday() {
+    try {
+      const lockDataStr = localStorage.getItem(config.LOCK_STORAGE_KEY);
+      if (lockDataStr) {
+        const lockData = JSON.parse(lockDataStr);
+        const todayStr = attendanceDateInput.value;
+        if (lockData.date === todayStr) {
+          // Đã điểm danh hôm nay -> Hiện luôn màn hình biên nhận
+          showSuccessScreen(lockData, true);
+        }
+      }
+    } catch (e) {
+      console.warn("Lỗi kiểm tra khóa máy:", e);
+    }
+  }
+
+  // 3. Xử lý chuyển đổi Có mặt / Vắng có lý do
+  function setupStatusSwitcher() {
+    radioStatusInputs.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        currentStatus = e.target.value;
+
+        if (currentStatus === "Có mặt") {
+          labelStatusPresent.classList.add("active");
+          labelStatusAbsent.classList.remove("active");
+          absentReasonGroup.style.display = "none";
+          absentReasonInput.required = false;
+          btnSubmit.classList.remove("btn-absent");
+
+          // Cập nhật lại trạng thái nút theo GPS
+          updateSubmitButtonState();
+          gpsStatusBox.style.display = "flex";
+        } else {
+          labelStatusAbsent.classList.add("active");
+          labelStatusPresent.classList.remove("active");
+          absentReasonGroup.style.display = "block";
+          absentReasonInput.required = true;
+          btnSubmit.classList.add("btn-absent");
+
+          // Báo vắng không bắt buộc GPS phòng học
+          btnSubmit.disabled = false;
+          btnSubmitText.textContent = "Gửi Báo Vắng Có Lý Do";
+
+          updateGpsUI(
+            "info",
+            "ℹ️ Chế độ Báo vắng có lý do",
+            "Không yêu cầu bạn phải có mặt tại phòng học. Vị trí hiện tại vẫn được ghi nhận để lưu vết."
+          );
+        }
+      });
+    });
+  }
+
+  // 4. Định vị GPS & Tính khoảng cách Haversine
   function getHaversineDistanceMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // Bán kính Trái Đất theo mét
+    const R = 6371e3;
     const phi1 = (lat1 * Math.PI) / 180;
     const phi2 = (lat2 * Math.PI) / 180;
     const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
@@ -140,21 +248,22 @@
     return R * c;
   }
 
-  // 3. Yêu cầu tọa độ GPS
   function requestGpsLocation(isManual = false) {
     if (!navigator.geolocation) {
-      updateGpsUI("error", "Trình duyệt không hỗ trợ định vị GPS", "Vui lòng mở trên Safari hoặc Chrome trên điện thoại.");
+      updateGpsUI("error", "Trình duyệt không hỗ trợ GPS", "Vui lòng mở trên Safari hoặc Chrome trên điện thoại.");
       return;
     }
 
-    updateGpsUI("loading", "Đang xác thực vị trí GPS...", "Vui lòng cho phép quyền vị trí trên điện thoại.");
-    btnSubmit.disabled = true;
-    btnSubmitText.textContent = "Đang kiểm tra vị trí...";
+    if (currentStatus === "Có mặt") {
+      updateGpsUI("loading", "Đang xác thực vị trí GPS...", "Vui lòng cho phép quyền vị trí trên điện thoại.");
+      btnSubmit.disabled = true;
+      btnSubmitText.textContent = "Đang kiểm tra vị trí...";
+    }
 
     const geoOptions = {
-      enableHighAccuracy: true, // Bật GPS độ chính xác cao
-      timeout: 12000,           // Chờ tối đa 12s
-      maximumAge: 0             // Luôn lấy vị trí mới nhất, không lấy cache
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 0
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -168,7 +277,6 @@
     );
   }
 
-  // Xử lý khi lấy GPS thành công
   function handleGpsSuccess(position) {
     const coords = position.coords;
     const userLat = coords.latitude;
@@ -193,107 +301,130 @@
     const distRounded = Math.round(distance);
     const accRounded = Math.round(accuracy);
 
-    // Kiểm tra bán kính
     if (distance <= config.ALLOWED_RADIUS_METERS) {
-      // HỢP LỆ: Ở trong phòng học
       currentUserLocation.isValid = true;
-      updateGpsUI(
-        "success",
-        `🟢 Vị trí hợp lệ (~${distRounded}m)`,
-        `Bạn đang cách phòng học khoảng <b>${distRounded}m</b> (Bán kính cho phép: ${config.ALLOWED_RADIUS_METERS}m, Sai số GPS: ±${accRounded}m).`
-      );
-      btnSubmit.disabled = false;
-      btnSubmitText.textContent = "Xác nhận Điểm danh ngay";
+      if (currentStatus === "Có mặt") {
+        updateGpsUI(
+          "success",
+          `🟢 Vị trí hợp lệ (~${distRounded}m)`,
+          `Bạn đang cách phòng học khoảng <b>${distRounded}m</b> (Bán kính cho phép: ${config.ALLOWED_RADIUS_METERS}m, Sai số GPS: ±${accRounded}m).`
+        );
+      }
     } else {
-      // KHÔNG HỢP LỆ: Ở ngoài phòng học
       currentUserLocation.isValid = false;
-      updateGpsUI(
-        "error",
-        `🔴 Bạn đang ở ngoài phòng học (~${distRounded}m)`,
-        `Khoảng cách hiện tại: <b>${distRounded}m</b>. Yêu cầu học viên phải có mặt trong phòng học (tối đa <b>${config.ALLOWED_RADIUS_METERS}m</b>).`
-      );
-      btnSubmit.disabled = true;
-      btnSubmitText.textContent = "Ngoài phạm vi cho phép";
+      if (currentStatus === "Có mặt") {
+        updateGpsUI(
+          "error",
+          `🔴 Ngoài phạm vi phòng học (~${distRounded}m)`,
+          `Khoảng cách hiện tại: <b>${distRounded}m</b>. Yêu cầu có mặt trong phòng học (tối đa <b>${config.ALLOWED_RADIUS_METERS}m</b>).`
+        );
+      }
     }
 
-    // Cảnh báo nếu sai số GPS quá lớn
-    if (accuracy > config.MAX_GPS_ACCURACY_METERS) {
-      gpsDetailText.innerHTML += `<br><span style="color:#b45309;">⚠️ Sai số GPS hơi cao (±${accRounded}m). Hãy bật Wi-Fi hoặc ra gần cửa sổ để GPS chính xác hơn.</span>`;
-    }
+    updateSubmitButtonState();
   }
 
-  // Xử lý khi bị từ chối hoặc lỗi GPS
   function handleGpsError(error) {
     let message = "Không thể lấy vị trí GPS.";
-    let detail = "Vui lòng thử lại.";
+    let detail = "Vui lòng kiểm tra quyền vị trí.";
 
     switch (error.code) {
       case error.PERMISSION_DENIED:
         message = "🔴 Chưa cấp quyền vị trí";
-        detail = "Bạn đã từ chối quyền GPS. Vui lòng vào Cài đặt trình duyệt (Chrome/Safari) -> Cấp quyền 'Vị trí' rồi bấm Quét lại.";
+        detail = "Bạn đã từ chối quyền GPS. Vui lòng vào Cài đặt trình duyệt -> Cấp quyền 'Vị trí' rồi bấm Quét lại.";
         break;
       case error.POSITION_UNAVAILABLE:
         message = "🔴 Không có tín hiệu GPS";
-        detail = "Không nhận diện được vị trí. Hãy chắc chắn máy đã bật 'Dịch vụ định vị' (Location Services).";
+        detail = "Hãy chắc chắn máy đã bật Định vị (Location Services).";
         break;
       case error.TIMEOUT:
-        message = "🟡 Quá thời gian định vị GPS";
-        detail = "Tín hiệu GPS yếu. Vui lòng bấm 'Quét lại' hoặc di chuyển ra nơi thông thoáng.";
+        message = "🟡 Quá thời gian định vị";
+        detail = "Tín hiệu GPS yếu. Vui lòng bấm 'Quét lại' hoặc di chuyển ra gần cửa sổ.";
         break;
     }
 
     currentUserLocation.isValid = false;
-    updateGpsUI("error", message, detail);
-    btnSubmit.disabled = true;
-    btnSubmitText.textContent = "Cần quyền GPS để điểm danh";
+    if (currentStatus === "Có mặt") {
+      updateGpsUI("error", message, detail);
+    }
+    updateSubmitButtonState();
   }
 
-  // Cập nhật giao diện Hộp trạng thái GPS
   function updateGpsUI(state, title, detail) {
     gpsStatusBox.className = `gps-box ${state}`;
     gpsStatusText.textContent = title;
     gpsDetailText.innerHTML = detail;
   }
 
-  // 4. Xử lý gửi Form điểm danh
+  function updateSubmitButtonState() {
+    if (currentStatus === "Vắng có lý do") {
+      btnSubmit.disabled = false;
+      btnSubmitText.textContent = "Gửi Báo Vắng Có Lý Do";
+    } else {
+      if (currentUserLocation.isValid) {
+        btnSubmit.disabled = false;
+        btnSubmitText.textContent = "Xác nhận Có mặt ngay";
+      } else {
+        btnSubmit.disabled = true;
+        btnSubmitText.textContent = "Vị trí chưa hợp lệ";
+      }
+    }
+  }
+
+  // 5. Gửi Form Điểm Danh
   async function handleFormSubmit(e) {
     e.preventDefault();
 
-    const mssv = studentIdInput.value.trim();
-    const hoTen = fullNameInput.value.trim();
-    const session = sessionNameInput.value.trim() || "Chung";
+    const fullName = fullNameInput.value.trim();
+    const donVi = donViInput.value.trim();
+    const attendanceDate = attendanceDateInput.value;
+    const formattedDate = formatDateVN(attendanceDate);
+    const absentReason = absentReasonInput.value.trim();
 
-    if (!mssv) {
-      alert("Vui lòng nhập Mã sinh viên (MSSV)!");
-      studentIdInput.focus();
-      return;
-    }
-
-    if (!hoTen) {
+    if (!fullName) {
       alert("Vui lòng nhập Họ và tên!");
       fullNameInput.focus();
       return;
     }
 
-    if (!currentUserLocation.isValid) {
-      alert("Vị trí của bạn chưa hợp lệ hoặc đang ở ngoài phòng học. Vui lòng bấm 'Quét lại' GPS.");
+    if (!donVi) {
+      alert("Vui lòng nhập Đơn vị công tác!");
+      donViInput.focus();
       return;
     }
 
-    // Kiểm tra cấu hình Webhook URL
+    if (!attendanceDate) {
+      alert("Vui lòng chọn Ngày điểm danh!");
+      attendanceDateInput.focus();
+      return;
+    }
+
+    if (currentStatus === "Có mặt" && !currentUserLocation.isValid) {
+      alert("Vị trí của bạn đang ở ngoài phòng học. Không thể điểm danh 'Có mặt'!");
+      return;
+    }
+
+    if (currentStatus === "Vắng có lý do" && !absentReason) {
+      alert("Vui lòng nhập cụ thể nội dung lý do vắng mặt!");
+      absentReasonInput.focus();
+      return;
+    }
+
     const webhookUrl = config.GOOGLE_SCRIPT_WEBHOOK_URL;
     if (!webhookUrl || webhookUrl.includes("YOUR_SCRIPT_ID_HERE")) {
-      alert("⚠️ Quản trị viên chưa cấu hình URL Google Apps Script Webhook trong file config.js!\n\nDữ liệu chưa thể gửi về Google Sheets.");
+      alert("⚠️ Quản trị viên chưa cấu hình URL Webhook Google Apps Script trong file config.js!");
       return;
     }
 
-    // Bắt đầu gửi
     setSubmittingState(true);
 
     const payload = {
-      mssv: mssv,
-      hoTen: hoTen,
-      session: session,
+      hoTen: fullName,
+      donVi: donVi,
+      attendanceDate: formattedDate,
+      status: currentStatus,
+      absentReason: absentReason,
+      deviceId: currentDeviceId,
       distance: currentUserLocation.distance,
       latitude: currentUserLocation.lat,
       longitude: currentUserLocation.lng,
@@ -302,11 +433,6 @@
     };
 
     try {
-      /**
-       * Gửi dữ liệu tới Google Apps Script Webhook.
-       * Dùng method: 'POST', mode: 'no-cors' để vượt qua cơ chế chặn CORS của Google Web App
-       * Khi dùng mode 'no-cors', request vẫn tới Google Script và doPost() vẫn ghi vào Sheet thành công 100%.
-       */
       await fetch(webhookUrl, {
         method: "POST",
         mode: "no-cors",
@@ -316,25 +442,41 @@
         body: JSON.stringify(payload)
       });
 
-      // Lưu thông tin sinh viên vào máy
-      saveStudentInfo(mssv, hoTen);
+      // Lưu thông tin người dùng vào máy
+      saveUserInfo(fullName, donVi);
 
-      // Rung phản hồi thành công trên điện thoại (Haptic feedback)
+      // Khóa thiết bị cho ngày này
+      const receiptData = {
+        name: fullName,
+        donVi: donVi,
+        date: formattedDate,
+        rawDate: attendanceDate,
+        status: currentStatus,
+        reason: absentReason,
+        deviceId: currentDeviceId,
+        time: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN")
+      };
+
+      try {
+        localStorage.setItem(config.LOCK_STORAGE_KEY, JSON.stringify({
+          date: attendanceDate,
+          ...receiptData
+        }));
+      } catch (e) {
+        console.warn("Không thể lưu khóa máy:", e);
+      }
+
+      // Rung phản hồi thành công trên điện thoại
       if (navigator.vibrate) {
         navigator.vibrate([80, 40, 100]);
       }
 
-      // Hiển thị màn hình thành công
-      showSuccessScreen({
-        name: hoTen,
-        mssv: mssv,
-        distance: Math.round(currentUserLocation.distance) + "m",
-        time: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN")
-      });
+      // Hiển thị màn hình biên nhận
+      showSuccessScreen(receiptData, false);
 
     } catch (err) {
-      console.error("Lỗi khi gửi điểm danh:", err);
-      alert("Có lỗi khi kết nối máy chủ Google Sheets. Vui lòng thử lại!");
+      console.error("Lỗi khi gửi dữ liệu:", err);
+      alert("Có lỗi kết nối đến máy chủ Google Sheets. Vui lòng thử lại!");
     } finally {
       setSubmittingState(false);
     }
@@ -347,27 +489,63 @@
       btnSubmitText.textContent = "Đang lưu vào Google Sheets...";
     } else {
       btnSpinner.style.display = "none";
-      btnSubmitText.textContent = "Xác nhận Điểm danh ngay";
+      updateSubmitButtonState();
     }
   }
 
-  function showSuccessScreen(data) {
+  function showSuccessScreen(data, isLockedView = false) {
     attendanceForm.style.display = "none";
     gpsStatusBox.style.display = "none";
+    document.querySelector(".status-switcher").style.display = "none";
+
     receiptName.textContent = data.name;
-    receiptMssv.textContent = data.mssv;
-    receiptDistance.textContent = data.distance;
+    receiptDonVi.textContent = data.donVi;
+    receiptDate.textContent = data.date;
+    receiptStatus.textContent = data.status;
+    receiptDeviceId.textContent = data.deviceId;
     receiptTime.textContent = data.time;
+
+    if (data.status === "Vắng có lý do" && data.reason) {
+      receiptReasonRow.style.display = "flex";
+      receiptReason.textContent = data.reason;
+      successIconWrap.className = "success-icon-wrap absent";
+      successTitle.textContent = "Đã gửi Báo vắng thành công!";
+    } else {
+      receiptReasonRow.style.display = "none";
+      successIconWrap.className = "success-icon-wrap";
+      successTitle.textContent = "Điểm danh Có mặt thành công!";
+    }
+
+    if (isLockedView) {
+      successSubtitle.textContent = "Thiết bị này đã hoàn thành điểm danh cho ngày hôm nay.";
+    }
+
     successScreen.style.display = "block";
   }
 
-  function resetFormForNewStudent() {
-    studentIdInput.value = "";
-    fullNameInput.value = "";
-    successScreen.style.display = "none";
-    attendanceForm.style.display = "block";
-    gpsStatusBox.style.display = "flex";
-    requestGpsLocation(true);
+  // Khôi phục & lưu thông tin
+  function restoreSavedInfo() {
+    try {
+      const saved = localStorage.getItem(config.STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.fullName) fullNameInput.value = parsed.fullName;
+        if (parsed.donVi) donViInput.value = parsed.donVi;
+      }
+    } catch (e) {
+      console.warn("Không đọc được LocalStorage:", e);
+    }
+  }
+
+  function saveUserInfo(fullName, donVi) {
+    try {
+      localStorage.setItem(
+        config.STORAGE_KEY,
+        JSON.stringify({ fullName, donVi, lastUpdate: Date.now() })
+      );
+    } catch (e) {
+      console.warn("Không thể lưu LocalStorage:", e);
+    }
   }
 
   // Khởi chạy khi DOM sẵn sàng

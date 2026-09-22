@@ -18,12 +18,24 @@
           <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
         </svg>
       </div>
-      <h1 id="appTitle">HỆ THỐNG ĐIỂM DANH</h1>
-      <p id="appSubtitle">Xác thực vị trí GPS thời gian thực</p>
+      <h1 id="appTitle">HỆ THỐNG ĐIỂM DANH LỚP HỌC</h1>
+      <p id="appSubtitle">Xác thực vị trí GPS & Thiết bị thời gian thực</p>
     </header>
 
     <!-- Main Card -->
     <main class="card">
+      <!-- Attendance Status Switcher (Có mặt / Vắng) -->
+      <div class="status-switcher" role="radiogroup" aria-label="Hình thức điểm danh">
+        <label class="switch-option active" id="labelStatusPresent">
+          <input type="radio" name="attendanceStatus" value="Có mặt" checked>
+          <span>🟢 Có mặt</span>
+        </label>
+        <label class="switch-option" id="labelStatusAbsent">
+          <input type="radio" name="attendanceStatus" value="Vắng có lý do">
+          <span>🟡 Vắng có lý do</span>
+        </label>
+      </div>
+
       <!-- GPS Status Box -->
       <section id="gpsStatusBox" class="gps-box loading" aria-live="polite">
         <div class="gps-status-header">
@@ -36,28 +48,13 @@
           </button>
         </div>
         <div class="gps-detail-row" id="gpsDetailText">
-          Vui lòng bấm <b>"Cho phép"</b> (Allow) khi trình duyệt hỏi quyền truy cập vị trí.
+          Vui lòng bấm <b>"Cho phép"</b> (Allow) khi trình duyệt hỏi quyền vị trí.
         </div>
       </section>
 
       <!-- Check-in Form -->
       <form id="attendanceForm" novalidate>
-        <div class="form-group">
-          <label class="form-label" for="studentId">
-            Mã sinh viên (MSSV) <span class="required">*</span>
-          </label>
-          <input 
-            type="text" 
-            id="studentId" 
-            name="studentId" 
-            class="form-input" 
-            placeholder="Ví dụ: 20210001" 
-            required 
-            autocomplete="off"
-            autocapitalize="characters"
-          >
-        </div>
-
+        <!-- Họ và tên -->
         <div class="form-group">
           <label class="form-label" for="fullName">
             Họ và tên <span class="required">*</span>
@@ -73,35 +70,70 @@
           >
         </div>
 
+        <!-- Đơn vị -->
         <div class="form-group">
-          <label class="form-label" for="sessionName">
-            Buổi học / Lớp
+          <label class="form-label" for="donVi">
+            Đơn vị <span class="required">*</span>
           </label>
           <input 
             type="text" 
-            id="sessionName" 
-            name="sessionName" 
+            id="donVi" 
+            name="donVi" 
             class="form-input" 
-            placeholder="Ví dụ: Buổi 1 - LLCT K12"
+            placeholder="Ví dụ: Công an huyện A / Phòng PA03 / K12" 
+            required 
+            autocomplete="off"
           >
-          <p class="form-hint" id="sessionHint">Có thể truyền tự động từ mã QR qua tham số URL</p>
+        </div>
+
+        <!-- Ngày điểm danh -->
+        <div class="form-group">
+          <label class="form-label" for="attendanceDate">
+            Ngày điểm danh <span class="required">*</span>
+          </label>
+          <input 
+            type="date" 
+            id="attendanceDate" 
+            name="attendanceDate" 
+            class="form-input" 
+            required
+          >
+        </div>
+
+        <!-- Lý do vắng (Chỉ hiện khi chọn Vắng có lý do) -->
+        <div class="form-group" id="absentReasonGroup" style="display: none;">
+          <label class="form-label" for="absentReason">
+            Nội dung lý do vắng mặt <span class="required">*</span>
+          </label>
+          <textarea 
+            id="absentReason" 
+            name="absentReason" 
+            class="form-input" 
+            rows="3" 
+            placeholder="Nhập lý do cụ thể (Ví dụ: Bị ốm, đã báo cáo chỉ huy / Đi công tác đột xuất...)"
+          ></textarea>
+        </div>
+
+        <!-- Mã thiết bị ẩn danh hiển thị nhỏ để minh bạch -->
+        <div class="device-fingerprint-info">
+          🔒 Mã thiết bị bảo mật: <span id="displayDeviceId">Đang tạo...</span>
         </div>
 
         <button type="submit" id="btnSubmit" class="btn-submit" disabled>
           <span id="btnSpinner" class="spinner" style="display: none;"></span>
-          <span id="btnSubmitText">Đang chờ vị trí hợp lệ...</span>
+          <span id="btnSubmitText">Đang kiểm tra vị trí...</span>
         </button>
       </form>
 
       <!-- Success Screen -->
       <section id="successScreen" class="success-screen">
-        <div class="success-icon-wrap">
+        <div class="success-icon-wrap" id="successIconWrap">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </div>
-        <h2>Điểm danh thành công!</h2>
-        <p style="font-size: 0.9rem; color: #4b5563;">Dữ liệu điểm danh của bạn đã được lưu vào Google Sheets.</p>
+        <h2 id="successTitle">Điểm danh thành công!</h2>
+        <p style="font-size: 0.9rem; color: #4b5563;" id="successSubtitle">Dữ liệu đã được ghi nhận vào hệ thống Google Sheets.</p>
         
         <div class="receipt-box">
           <div class="receipt-row">
@@ -109,22 +141,34 @@
             <span class="receipt-value" id="receiptName">-</span>
           </div>
           <div class="receipt-row">
-            <span class="receipt-label">MSSV:</span>
-            <span class="receipt-value" id="receiptMssv">-</span>
+            <span class="receipt-label">Đơn vị:</span>
+            <span class="receipt-value" id="receiptDonVi">-</span>
           </div>
           <div class="receipt-row">
-            <span class="receipt-label">Khoảng cách:</span>
-            <span class="receipt-value" id="receiptDistance">-</span>
+            <span class="receipt-label">Ngày điểm danh:</span>
+            <span class="receipt-value" id="receiptDate">-</span>
           </div>
           <div class="receipt-row">
-            <span class="receipt-label">Thời gian:</span>
+            <span class="receipt-label">Trạng thái:</span>
+            <span class="receipt-value" id="receiptStatus">-</span>
+          </div>
+          <div class="receipt-row" id="receiptReasonRow" style="display: none;">
+            <span class="receipt-label">Lý do:</span>
+            <span class="receipt-value" id="receiptReason">-</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Mã thiết bị:</span>
+            <span class="receipt-value" id="receiptDeviceId" style="font-family: monospace; font-size: 0.8rem;">-</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Thời gian gửi:</span>
             <span class="receipt-value" id="receiptTime">-</span>
           </div>
         </div>
 
-        <button type="button" class="btn-secondary" id="btnCheckAgain" style="width: 100%; margin-top: 10px;">
-          Điểm danh lại / Người khác
-        </button>
+        <p class="lock-notice">
+          ℹ️ Thiết bị này đã hoàn thành điểm danh cho ngày hôm nay.
+        </p>
       </section>
     </main>
 
