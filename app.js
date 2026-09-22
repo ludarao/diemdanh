@@ -179,19 +179,19 @@
 
   // Kiểm tra khóa thiết bị (chống dùng 1 máy điểm danh nhiều lần trong ngày)
   function checkDeviceLockToday() {
-    try {
-      const lockDataStr = localStorage.getItem(config.LOCK_STORAGE_KEY);
-      if (lockDataStr) {
-        const lockData = JSON.parse(lockDataStr);
-        const todayStr = attendanceDateInput.value;
-        if (lockData.date === todayStr) {
-          // Đã điểm danh hôm nay -> Hiện luôn màn hình biên nhận
-          showSuccessScreen(lockData, true);
-        }
-      }
-    } catch (e) {
-      console.warn("Lỗi kiểm tra khóa máy:", e);
-    }
+    // try {
+    //   const lockDataStr = localStorage.getItem(config.LOCK_STORAGE_KEY);
+    //   if (lockDataStr) {
+    //     const lockData = JSON.parse(lockDataStr);
+    //     const todayStr = attendanceDateInput.value;
+    //     if (lockData.date === todayStr) {
+    //       // Đã điểm danh hôm nay -> Hiện luôn màn hình biên nhận
+    //       showSuccessScreen(lockData, true);
+    //     }
+    //   }
+    // } catch (e) {
+    //   console.warn("Lỗi kiểm tra khóa máy:", e);
+    // }
   }
 
   // 3. Xử lý chuyển đổi Có mặt / Vắng có lý do
