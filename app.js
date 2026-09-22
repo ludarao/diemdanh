@@ -62,16 +62,6 @@
   const receiptDistance = document.getElementById("receiptDistance");
   const receiptTime = document.getElementById("receiptTime");
 
-  // Calibration Modal Elements
-  const btnOpenCalibration = document.getElementById("btnOpenCalibration");
-  const calibrationModal = document.getElementById("calibrationModal");
-  const btnCloseModal = document.getElementById("btnCloseModal");
-  const btnFetchCurrentGps = document.getElementById("btnFetchCurrentGps");
-  const btnSaveCalibration = document.getElementById("btnSaveCalibration");
-  const calibLat = document.getElementById("calibLat");
-  const calibLng = document.getElementById("calibLng");
-  const calibRadius = document.getElementById("calibRadius");
-
   // 1. Khởi tạo ứng dụng
   function init() {
     if (config.APP_TITLE && appTitleEl) appTitleEl.textContent = config.APP_TITLE;
@@ -90,9 +80,6 @@
     btnRefreshGps.addEventListener("click", () => requestGpsLocation(true));
     attendanceForm.addEventListener("submit", handleFormSubmit);
     btnCheckAgain.addEventListener("click", resetFormForNewStudent);
-
-    // Sự kiện Modal Giảng viên
-    setupCalibrationModal();
   }
 
   // Đọc query parameters từ URL
@@ -381,62 +368,6 @@
     attendanceForm.style.display = "block";
     gpsStatusBox.style.display = "flex";
     requestGpsLocation(true);
-  }
-
-  // 5. Tính năng hiệu chuẩn tọa độ phòng học cho Giảng viên
-  function setupCalibrationModal() {
-    btnOpenCalibration.addEventListener("click", () => {
-      calibLat.value = config.CLASSROOM_LAT;
-      calibLng.value = config.CLASSROOM_LNG;
-      calibRadius.value = config.ALLOWED_RADIUS_METERS;
-      calibrationModal.style.display = "flex";
-    });
-
-    btnCloseModal.addEventListener("click", () => {
-      calibrationModal.style.display = "none";
-    });
-
-    btnFetchCurrentGps.addEventListener("click", () => {
-      btnFetchCurrentGps.disabled = true;
-      btnFetchCurrentGps.textContent = "Đang lấy vị trí hiện tại...";
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          calibLat.value = pos.coords.latitude.toFixed(6);
-          calibLng.value = pos.coords.longitude.toFixed(6);
-          btnFetchCurrentGps.disabled = false;
-          btnFetchCurrentGps.textContent = "✓ Đã lấy tọa độ vị trí hiện tại!";
-        },
-        (err) => {
-          btnFetchCurrentGps.disabled = false;
-          btnFetchCurrentGps.textContent = "📍 Lấy tọa độ vị trí bạn đang đứng";
-          alert("Không lấy được tọa độ: " + err.message);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    });
-
-    btnSaveCalibration.addEventListener("click", () => {
-      const newLat = parseFloat(calibLat.value);
-      const newLng = parseFloat(calibLng.value);
-      const newRadius = parseInt(calibRadius.value, 10);
-
-      if (isNaN(newLat) || isNaN(newLng) || isNaN(newRadius)) {
-        alert("Tọa độ hoặc bán kính không hợp lệ!");
-        return;
-      }
-
-      const overrideData = { lat: newLat, lng: newLng, radius: newRadius };
-      localStorage.setItem("OVERRIDE_ROOM_COORDS", JSON.stringify(overrideData));
-
-      config.CLASSROOM_LAT = newLat;
-      config.CLASSROOM_LNG = newLng;
-      config.ALLOWED_RADIUS_METERS = newRadius;
-
-      alert("✓ Đã cập nhật tọa độ phòng học thành công trên thiết bị này!\n\nLưu ý: Để áp dụng cho tất cả học viên, bạn hãy copy tọa độ này dán vào file config.js trước khi deploy lên Vercel.");
-      calibrationModal.style.display = "none";
-      requestGpsLocation(true);
-    });
   }
 
   // Khởi chạy khi DOM sẵn sàng

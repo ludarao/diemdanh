@@ -128,45 +128,10 @@
       </section>
     </main>
 
-    <!-- Footer & Quick Settings for Teacher -->
+    <!-- Footer -->
     <footer class="app-footer">
       <div>Hệ thống Điểm danh GPS &bull; Tích hợp Google Sheets</div>
-      <button type="button" class="btn-teacher-settings" id="btnOpenCalibration">
-        ⚙️ Cài đặt tọa độ phòng học (Dành cho Giảng viên)
-      </button>
     </footer>
-  </div>
-
-  <!-- Calibration Modal for Teacher -->
-  <div class="modal-overlay" id="calibrationModal">
-    <div class="modal-content">
-      <h3>⚙️ Cài đặt Tọa độ Phòng học</h3>
-      <p style="font-size: 0.85rem; color: #4b5563; margin-bottom: 12px;">
-        Giảng viên đứng tại phòng học, bấm nút dưới để lấy ngay tọa độ GPS thực tế của phòng:
-      </p>
-
-      <div class="form-group">
-        <label class="form-label">Vĩ độ (Latitude):</label>
-        <input type="text" id="calibLat" class="form-input" readonly>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Kinh độ (Longitude):</label>
-        <input type="text" id="calibLng" class="form-input" readonly>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Bán kính cho phép (Mét):</label>
-        <input type="number" id="calibRadius" class="form-input" value="40">
-      </div>
-
-      <button type="button" id="btnFetchCurrentGps" class="btn-submit" style="margin-bottom: 12px; background: #3b82f6;">
-        📍 Lấy tọa độ vị trí bạn đang đứng
-      </button>
-
-      <div class="modal-actions">
-        <button type="button" class="btn-secondary" id="btnCloseModal">Đóng</button>
-        <button type="button" class="btn-primary" id="btnSaveCalibration">Lưu & Áp dụng</button>
-      </div>
-    </div>
   </div>
 
   <!-- Scripts -->

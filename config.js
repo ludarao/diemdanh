@@ -11,8 +11,8 @@ const CONFIG = {
 
   // Tọa độ phòng học mục tiêu (Latitude & Longitude)
   // Bạn có thể chỉnh sửa trực tiếp ở đây, hoặc dùng nút "Cài đặt phòng học" trên giao diện web
-  CLASSROOM_LAT: 21.028511, // Vĩ độ phòng học (Ví dụ Hà Nội)
-  CLASSROOM_LNG: 105.854444, // Kinh độ phòng học (Ví dụ Hà Nội)
+  CLASSROOM_LAT: 13.993109, // Vĩ độ phòng học (Ví dụ Hà Nội)
+  CLASSROOM_LNG: 107.997314, // Kinh độ phòng học (Ví dụ Hà Nội)
 
   // Bán kính cho phép điểm danh quanh phòng học (tính bằng mét)
   // Khuyên dùng từ 30m - 50m (tùy theo kích thước phòng học và sai số GPS điện thoại)
@@ -23,7 +23,7 @@ const CONFIG = {
 
   // URL Webhook của Google Apps Script (Nhận được sau khi bấm 'Deploy as Web App' trên Google Sheets)
   // Dán URL Web App của bạn vào đây:
-  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbz_YOUR_SCRIPT_ID_HERE/exec",
+  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbw8BzmKOOaW5vcIq1dJ6WDNJEJAj2JQJ9wcumZ6S-vOCR6T6E65d3nXDa07T2SvkbXz/exec",
 
   // Khóa lưu trữ LocalStorage để tự nhớ MSSV & Họ tên học viên
   STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V1"
