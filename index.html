@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#10b981">
+  <title>Điểm danh GPS Lớp học</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2310b981'><path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z'/></svg>">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-badge">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        </svg>
+      </div>
+      <h1 id="appTitle">HỆ THỐNG ĐIỂM DANH</h1>
+      <p id="appSubtitle">Xác thực vị trí GPS thời gian thực</p>
+    </header>
+
+    <!-- Main Card -->
+    <main class="card">
+      <!-- GPS Status Box -->
+      <section id="gpsStatusBox" class="gps-box loading" aria-live="polite">
+        <div class="gps-status-header">
+          <div class="gps-status-title">
+            <span class="gps-pulse-dot" id="gpsPulse"></span>
+            <span id="gpsStatusText">Đang định vị GPS...</span>
+          </div>
+          <button type="button" class="btn-retry-gps" id="btnRefreshGps" title="Làm mới GPS">
+            🔄 Quét lại
+          </button>
+        </div>
+        <div class="gps-detail-row" id="gpsDetailText">
+          Vui lòng bấm <b>"Cho phép"</b> (Allow) khi trình duyệt hỏi quyền truy cập vị trí.
+        </div>
+      </section>
+
+      <!-- Check-in Form -->
+      <form id="attendanceForm" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="studentId">
+            Mã sinh viên (MSSV) <span class="required">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="studentId" 
+            name="studentId" 
+            class="form-input" 
+            placeholder="Ví dụ: 20210001" 
+            required 
+            autocomplete="off"
+            autocapitalize="characters"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="fullName">
+            Họ và tên <span class="required">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="fullName" 
+            name="fullName" 
+            class="form-input" 
+            placeholder="Ví dụ: Nguyễn Văn A" 
+            required 
+            autocomplete="name"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="sessionName">
+            Buổi học / Lớp
+          </label>
+          <input 
+            type="text" 
+            id="sessionName" 
+            name="sessionName" 
+            class="form-input" 
+            placeholder="Ví dụ: Buổi 1 - LLCT K12"
+          >
+          <p class="form-hint" id="sessionHint">Có thể truyền tự động từ mã QR qua tham số URL</p>
+        </div>
+
+        <button type="submit" id="btnSubmit" class="btn-submit" disabled>
+          <span id="btnSpinner" class="spinner" style="display: none;"></span>
+          <span id="btnSubmitText">Đang chờ vị trí hợp lệ...</span>
+        </button>
+      </form>
+
+      <!-- Success Screen -->
+      <section id="successScreen" class="success-screen">
+        <div class="success-icon-wrap">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <h2>Điểm danh thành công!</h2>
+        <p style="font-size: 0.9rem; color: #4b5563;">Dữ liệu điểm danh của bạn đã được lưu vào Google Sheets.</p>
+        
+        <div class="receipt-box">
+          <div class="receipt-row">
+            <span class="receipt-label">Họ và tên:</span>
+            <span class="receipt-value" id="receiptName">-</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">MSSV:</span>
+            <span class="receipt-value" id="receiptMssv">-</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Khoảng cách:</span>
+            <span class="receipt-value" id="receiptDistance">-</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Thời gian:</span>
+            <span class="receipt-value" id="receiptTime">-</span>
+          </div>
+        </div>
+
+        <button type="button" class="btn-secondary" id="btnCheckAgain" style="width: 100%; margin-top: 10px;">
+          Điểm danh lại / Người khác
+        </button>
+      </section>
+    </main>
+
+    <!-- Footer & Quick Settings for Teacher -->
+    <footer class="app-footer">
+      <div>Hệ thống Điểm danh GPS &bull; Tích hợp Google Sheets</div>
+      <button type="button" class="btn-teacher-settings" id="btnOpenCalibration">
+        ⚙️ Cài đặt tọa độ phòng học (Dành cho Giảng viên)
+      </button>
+    </footer>
+  </div>
+
+  <!-- Calibration Modal for Teacher -->
+  <div class="modal-overlay" id="calibrationModal">
+    <div class="modal-content">
+      <h3>⚙️ Cài đặt Tọa độ Phòng học</h3>
+      <p style="font-size: 0.85rem; color: #4b5563; margin-bottom: 12px;">
+        Giảng viên đứng tại phòng học, bấm nút dưới để lấy ngay tọa độ GPS thực tế của phòng:
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">Vĩ độ (Latitude):</label>
+        <input type="text" id="calibLat" class="form-input" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kinh độ (Longitude):</label>
+        <input type="text" id="calibLng" class="form-input" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bán kính cho phép (Mét):</label>
+        <input type="number" id="calibRadius" class="form-input" value="40">
+      </div>
+
+      <button type="button" id="btnFetchCurrentGps" class="btn-submit" style="margin-bottom: 12px; background: #3b82f6;">
+        📍 Lấy tọa độ vị trí bạn đang đứng
+      </button>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="btnCloseModal">Đóng</button>
+        <button type="button" class="btn-primary" id="btnSaveCalibration">Lưu & Áp dụng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

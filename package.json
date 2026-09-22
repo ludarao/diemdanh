@@ -1,0 +1,12 @@
+{
+  "name": "diemdanh-gps",
+  "version": "1.0.0",
+  "description": "Hệ thống Web điểm danh GPS kết nối Google Sheets",
+  "scripts": {
+    "dev": "npx serve .",
+    "deploy": "npx vercel --prod"
+  },
+  "keywords": ["attendance", "gps", "google-sheets", "vercel"],
+  "author": "",
+  "license": "MIT"
+}
