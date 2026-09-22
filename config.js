@@ -16,10 +16,10 @@ const CONFIG = {
 
   // Bán kính cho phép điểm danh quanh phòng học (tính bằng mét)
   // Khuyên dùng từ 30m - 50m (tùy theo kích thước phòng học và sai số GPS điện thoại)
-  ALLOWED_RADIUS_METERS: 40,
+  ALLOWED_RADIUS_METERS: 100,
 
-  // Ngưỡng sai số GPS tối đa được chấp nhận (mét). Nếu GPS thiết bị quá mờ (sai số > 80m) sẽ báo bật GPS độ chính xác cao
-  MAX_GPS_ACCURACY_METERS: 80,
+  // Ngưỡng sai số GPS tối đa được chấp nhận (mét). Nếu GPS thiết bị quá mờ (sai số > 80m) sẽz báo bật GPS độ chính xác cao
+  MAX_GPS_ACCURACY_METERS: 150,
 
   // URL Webhook của Google Apps Script (Nhận được sau khi bấm 'Deploy as Web App' trên Google Sheets)
   // Dán URL Web App của bạn vào đây:
