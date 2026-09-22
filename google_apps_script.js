@@ -10,7 +10,15 @@
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000); // Khóa chống nghẽn khi nhiều người gửi cùng lúc
+  // Chờ xếp hàng tối đa 30 giây để đảm bảo 100+ người gửi cùng lúc không bị rớt dòng nào
+  try {
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "busy",
+      message: "Hệ thống đang quá tải, vui lòng bấm gửi lại sau 3 giây!"
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();

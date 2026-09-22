@@ -23,7 +23,7 @@ const CONFIG = {
 
   // URL Webhook của Google Apps Script (Nhận được sau khi bấm 'Deploy as Web App' trên Google Sheets)
   // Dán URL Web App của bạn vào đây:
-  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbw8BzmKOOaW5vcIq1dJ6WDNJEJAj2JQJ9wcumZ6S-vOCR6T6E65d3nXDa07T2SvkbXz/exec",
+  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbw624Hv1du9qrmLtTXLK1nnhkW8PbnLOcvufsRt5l2Vtduc_4zosZOfwOslJeLEsBGb/exec",
 
   // Khóa lưu trữ LocalStorage để tự nhớ MSSV & Họ tên học viên
   STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V1"
