@@ -173,13 +173,62 @@
     </main>
 
     <!-- Footer -->
+    <!-- Footer -->
     <footer class="app-footer">
       <div>Hệ thống Điểm danh GPS &bull; Tích hợp Google Sheets</div>
+      <!-- Liên kết Hướng dẫn mở Popup -->
+      <div style="margin-top: 8px;">
+        <a href="#" id="linkGpsGuide" style="color: #10b981; font-size: 0.85rem; text-decoration: underline; font-weight: 500;">
+          ❓ Hướng dẫn cấp lại quyền Vị trí (GPS) khi bị chặn
+        </a>
+      </div>
     </footer>
   </div>
 
   <!-- Scripts -->
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <!-- Popup Hướng dẫn cấp lại quyền GPS -->
+  <div id="gpsGuideModal" class="gps-modal-overlay" style="display: none;">
+    <div class="gps-modal-content">
+      <div class="gps-modal-header">
+        <div class="gps-modal-icon">📍</div>
+        <h2>HƯỚNG DẪN MỞ LẠI QUYỀN VỊ TRÍ</h2>
+        <p>Nếu bạn lỡ bấm "Từ chối", hãy làm theo hướng dẫn 3 bước dưới đây:</p>
+      </div>
+
+      <!-- Tab chuyển đổi iOS / Android -->
+      <div class="tab-switcher">
+        <button type="button" class="tab-btn active" id="tabIosBtn">📱 iPhone (Safari)</button>
+        <button type="button" class="tab-btn" id="tabAndroidBtn">🤖 Android (Chrome)</button>
+      </div>
+
+      <!-- Hướng dẫn cho iPhone -->
+      <div id="guideIosContent" class="guide-step-box">
+        <ol>
+          <li>Nhìn lên thanh nhập địa chỉ web ở trên cùng, bấm vào biểu tượng <b>`aA`</b> (hoặc <b>🔒 Ổ khóa</b>) ở góc trái.</li>
+          <li>Chọn <b>Cài đặt trang web</b> <i>(Website Settings)</i>.</li>
+          <li>Mục <b>Vị trí</b> <i>(Location)</i>: Chuyển sang <b>Cho phép</b> <i>(Allow)</i> hoặc <b>Hỏi</b> <i>(Ask)</i>.</li>
+          <li>Tải lại trang web và bấm điểm danh lại.</li>
+        </ol>
+      </div>
+
+      <!-- Hướng dẫn cho Android -->
+      <div id="guideAndroidContent" class="guide-step-box" style="display: none;">
+        <ol>
+          <li>Nhìn lên thanh nhập địa chỉ web ở trên cùng, bấm vào biểu tượng <b>🔒 Ổ khóa</b> ở góc bên trái.</li>
+          <li>Chọn <b>Quyền truy cập trang web</b> <i>(Permissions / Site settings)</i>.</li>
+          <li>Bấm <b>Bật vị trí</b> hoặc chọn <b>Xóa & Đặt lại</b> <i>(Reset permissions)</i>.</li>
+          <li>Tải lại trang web và bấm điểm danh lại.</li>
+        </ol>
+      </div>
+
+      <div class="gps-modal-footer">
+        <button type="button" id="btnCloseGpsGuide" class="btn-modal-close">
+          Đã hiểu & Đóng
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

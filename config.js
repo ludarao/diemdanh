@@ -22,8 +22,7 @@ const CONFIG = {
   MAX_GPS_ACCURACY_METERS: 150,
 
   // URL Webhook của Google Apps Script (Nhận được sau khi bấm 'Deploy as Web App' trên Google Sheets)
-  // Dán URL Web App của bạn vào đây:
-  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbw624Hv1du9qrmLtTXLK1nnhkW8PbnLOcvufsRt5l2Vtduc_4zosZOfwOslJeLEsBGb/exec",
+  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbxEcmcflba7aL_wgxvNW98UrJDvsH9HqcKmo7clPhzqqRjs1vTdVG_zO8JPBgBKQ617/exec",
 
   // Khóa lưu trữ LocalStorage để tự nhớ MSSV & Họ tên học viên
   STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V1"

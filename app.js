@@ -66,6 +66,7 @@
   const receiptTime = document.getElementById("receiptTime");
 
   // 1. Khởi tạo ứng dụng
+  // 1. Khởi tạo ứng dụng
   async function init() {
     if (config.APP_TITLE && appTitleEl) appTitleEl.textContent = config.APP_TITLE;
     if (config.SUB_TITLE && appSubtitleEl) appSubtitleEl.textContent = config.SUB_TITLE;
@@ -91,9 +92,77 @@
     // Bắt đầu quét GPS
     requestGpsLocation();
 
-    // Gán sự kiện
-    btnRefreshGps.addEventListener("click", () => requestGpsLocation(true));
-    attendanceForm.addEventListener("submit", handleFormSubmit);
+    // Gán sự kiện cho form & nút quét lại GPS
+    if (btnRefreshGps) btnRefreshGps.addEventListener("click", () => requestGpsLocation(true));
+    if (attendanceForm) attendanceForm.addEventListener("submit", handleFormSubmit);
+
+    // 👉 THÊM DÒNG NÀY ĐỂ KÍCH HOẠT POPUP HƯỚNG DẪN GPS:
+    setupGpsGuideModal();
+  }
+
+  // 2. Định nghĩa hàm setupGpsGuideModal() (ĐẶT NẰM NGOÀI HÀM init)
+  function setupGpsGuideModal() {
+    const linkGpsGuide = document.getElementById("linkGpsGuide");
+    const gpsGuideModal = document.getElementById("gpsGuideModal");
+    const btnCloseGpsGuide = document.getElementById("btnCloseGpsGuide");
+    const tabIosBtn = document.getElementById("tabIosBtn");
+    const tabAndroidBtn = document.getElementById("tabAndroidBtn");
+    const guideIosContent = document.getElementById("guideIosContent");
+    const guideAndroidContent = document.getElementById("guideAndroidContent");
+
+    if (!linkGpsGuide || !gpsGuideModal) {
+      console.warn("Không tìm thấy id linkGpsGuide hoặc gpsGuideModal trong HTML");
+      return;
+    }
+
+    // Tự nhận diện thiết bị để chọn sẵn Tab phù hợp khi mở
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    // Mở Modal khi bấm vào link
+    linkGpsGuide.addEventListener("click", (e) => {
+      e.preventDefault(); // Chặn hành vi nhảy trang của href="#"
+      gpsGuideModal.style.display = "flex";
+
+      if (isIos) {
+        switchTab("ios");
+      } else {
+        switchTab("android");
+      }
+    });
+
+    // Đóng Modal khi bấm nút Đóng
+    if (btnCloseGpsGuide) {
+      btnCloseGpsGuide.addEventListener("click", () => {
+        gpsGuideModal.style.display = "none";
+      });
+    }
+
+    // Đóng khi click ra ngoài hộp thoại
+    gpsGuideModal.addEventListener("click", (e) => {
+      if (e.target === gpsGuideModal) {
+        gpsGuideModal.style.display = "none";
+      }
+    });
+
+    // Chuyển Tab iOS / Android
+    if (tabIosBtn && tabAndroidBtn) {
+      tabIosBtn.addEventListener("click", () => switchTab("ios"));
+      tabAndroidBtn.addEventListener("click", () => switchTab("android"));
+    }
+
+    function switchTab(platform) {
+      if (platform === "ios") {
+        tabIosBtn.classList.add("active");
+        tabAndroidBtn.classList.remove("active");
+        guideIosContent.style.display = "block";
+        guideAndroidContent.style.display = "none";
+      } else {
+        tabAndroidBtn.classList.add("active");
+        tabIosBtn.classList.remove("active");
+        guideAndroidContent.style.display = "block";
+        guideIosContent.style.display = "none";
+      }
+    }
   }
 
   // Khởi tạo ngày mặc định là hôm nay
@@ -116,26 +185,29 @@
   }
 
   // 2. Tạo Device Fingerprint độc nhất cho từng thiết bị
+  // Tạo Device ID độc bản (Kết hợp Fingerprint + Random UUID ngầm)
   async function getOrCreateDeviceFingerprint() {
-    const storageKey = "DEVICE_PERMANENT_ID_V2";
+    const storageKey = "DEVICE_PERMANENT_ID_V3";
     let savedId = localStorage.getItem(storageKey);
+    
+    // Nếu thiết bị này đã từng lưu mã trước đó -> Lấy lại mã cũ
     if (savedId) {
       return savedId;
     }
 
-    // Thu thập các thông số phần cứng đặc trưng
-    const components = [
+    // 1. Thu thập thông số phần cứng cơ bản
+    const hardwareInfo = [
       navigator.userAgent,
-      screen.width + "x" + screen.height + "x" + screen.colorDepth,
-      window.devicePixelRatio || 1,
-      navigator.language || "",
+      screen.width + "x" + screen.height,
       navigator.hardwareConcurrency || 2,
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-      navigator.maxTouchPoints || 0,
       getCanvasHash()
-    ];
+    ].join("|");
 
-    const rawString = components.join("###");
+    // 2. Tạo một chuỗi ngẫu nhiên cực lớn (Random Token) dành riêng cho thiết bị này
+    const randomSeed = Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    
+    // 3. Kết hợp để tạo ra mã duy nhất (Ví dụ: DEV-A8F2K912)
+    const rawString = hardwareInfo + "###" + randomSeed;
     const hash = simpleHash(rawString);
     const newId = "DEV-" + hash.toUpperCase();
 
