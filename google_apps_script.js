@@ -1,29 +1,21 @@
 /**
- * GOOGLE APPS SCRIPT WEBHOOK NHẬN DỮ LIỆU ĐIỂM DANH (CẬP NHẬT MỚI)
- * ================================================================
- * TÍNH NĂNG MỚI:
- * 1. Chống điểm danh hộ qua Device Fingerprint (Mã thiết bị).
- * 2. Tự động phát hiện và cảnh báo đỏ nếu 1 điện thoại điểm danh cho 2 người khác nhau trong cùng ngày.
- * 3. Hỗ trợ điểm danh "Có mặt" hoặc "Vắng có lý do" (kèm nội dung lý do).
- * 4. Trường thông tin: Họ và tên, Đơn vị, Ngày điểm danh.
+ * GOOGLE APPS SCRIPT WEBHOOK NHẬN DỮ LIỆU ĐIỂM DANH (ĐÃ SỬA LỖI GHI TRÙNG)
  */
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  // Chờ xếp hàng tối đa 30 giây để đảm bảo 100+ người gửi cùng lúc không bị rớt dòng nào
   try {
     lock.waitLock(30000);
   } catch (lockErr) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "busy",
-      message: "Hệ thống đang quá tải, vui lòng bấm gửi lại sau 3 giây!"
+      message: "Hệ thống đang quá tải, vui lòng gửi lại sau 3 giây!"
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     
-    // Tự động khởi tạo hàng tiêu đề nếu bảng tính còn trống
     if (sheet.getLastRow() === 0) {
       initHeader(sheet);
     }
@@ -40,30 +32,53 @@ function doPost(e) {
     }
 
     var formattedSubmitTime = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss");
-    var hoTen = (data.hoTen || "").trim();
-    var donVi = (data.donVi || "").trim();
-    var attendanceDate = (data.attendanceDate || Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy")).trim();
-    var status = data.status || "Có mặt"; // "Có mặt" hoặc "Vắng có lý do"
-    var absentReason = (data.absentReason || "").trim();
-    var deviceId = (data.deviceId || "").trim();
+    var hoTen = String(data.hoTen || "").trim();
+    var donVi = String(data.donVi || "").trim();
+    var attendanceDate = String(data.attendanceDate || Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy")).trim();
+    var status = data.status || "Có mặt";
+    var absentReason = String(data.absentReason || "").trim();
+    var deviceId = String(data.deviceId || "").trim();
     var distance = data.distance ? parseFloat(data.distance).toFixed(1) : (status === "Vắng có lý do" ? "N/A" : "");
     var latitude = data.latitude || "";
     var longitude = data.longitude || "";
     var accuracy = data.accuracy ? parseFloat(data.accuracy).toFixed(1) : "";
     var userAgent = data.userAgent || "";
 
-    // KIỂM TRA CHỐNG ĐIỂM DANH HỘ (DEVICE FINGERPRINT CHECK)
+    var lastRowIndex = sheet.getLastRow();
+
+    // =========================================================
+    // 🛑 CHỐNG GHI TRÙNG DỮ LIỆU KHI BẤM NỘP ĐÚP LẦN
+    // =========================================================
+    if (lastRowIndex >= 2) {
+      var lastRowValues = sheet.getRange(lastRowIndex, 1, 1, 8).getDisplayValues()[0];
+      var lastSubmitTime = lastRowValues[0]; // Cột A: Thời gian gửi
+      var lastName = String(lastRowValues[1]).trim().toLowerCase(); // Cột B: Họ tên
+      var lastDeviceId = String(lastRowValues[7]).trim(); // Cột H: Device ID
+
+      // Nếu cùng Họ tên + cùng Device ID + cùng Thời gian (hoặc vừa ghi xong)
+      if (lastName === hoTen.toLowerCase() && lastDeviceId === deviceId && lastSubmitTime === formattedSubmitTime) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          message: "Điểm danh thành công (đã ghi nhận)!"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // =========================================================
+    // 1. KIỂM TRA TRÙNG THIẾT BỊ TRONG NGÀY
+    // =========================================================
     var fraudWarning = "Hợp lệ (1 máy/1 người)";
     var isDuplicateDevice = false;
 
-    if (deviceId && sheet.getLastRow() > 1) {
-      var allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+    if (deviceId && lastRowIndex >= 2) {
+      var allData = sheet.getRange(2, 1, lastRowIndex - 1, 12).getDisplayValues();
+      
       for (var i = 0; i < allData.length; i++) {
-        var rowDate = String(allData[i][3]); // Cột 4: Ngày điểm danh
-        var rowName = String(allData[i][1]); // Cột 2: Họ và tên
-        var rowDeviceId = String(allData[i][7]); // Cột 8: Mã thiết bị
+        var rowName = String(allData[i][1]).trim();       // Cột B: Họ và tên
+        var rowDate = String(allData[i][3]).trim();       // Cột D: Ngày điểm danh
+        var rowDeviceId = String(allData[i][7]).trim();   // Cột H: Mã thiết bị
 
-        // Nếu trùng DeviceId và cùng Ngày, nhưng tên người khác nhau
+        // Nếu CÙNG DeviceId + CÙNG Ngày điểm danh + KHÁC Tên người
         if (rowDeviceId === deviceId && rowDate === attendanceDate && rowName.toLowerCase() !== hoTen.toLowerCase()) {
           fraudWarning = "⚠️ CẢNH BÁO: Trùng thiết bị với " + rowName;
           isDuplicateDevice = true;
@@ -72,57 +87,87 @@ function doPost(e) {
       }
     }
 
-    // Ghi dữ liệu vào hàng mới
+    // =========================================================
+    // 2. KIỂM TRA PHÁT HIỆN HỌC VIÊN ĐỔI THIẾT BỊ LIÊN TỤC
+    // =========================================================
+    var isFrequentDeviceChanger = false;
+    var usedDevicesList = [];
+
+    if (lastRowIndex >= 2) {
+      var allHistory = sheet.getRange(2, 1, lastRowIndex - 1, 8).getDisplayValues();
+      
+      for (var k = 0; k < allHistory.length; k++) {
+        var hName = String(allHistory[k][1]).trim().toLowerCase();
+        var hDeviceId = String(allHistory[k][7]).trim();
+
+        if (hName === hoTen.toLowerCase() && hDeviceId !== "") {
+          if (usedDevicesList.indexOf(hDeviceId) === -1) {
+            usedDevicesList.push(hDeviceId);
+          }
+        }
+      }
+
+      if (deviceId && usedDevicesList.indexOf(deviceId) === -1) {
+        usedDevicesList.push(deviceId);
+      }
+
+      if (usedDevicesList.length >= 3) {
+        isFrequentDeviceChanger = true;
+        if (isDuplicateDevice) {
+          fraudWarning += " | 🚨 NGHI VẤN: Đổi máy " + usedDevicesList.length + " lần!";
+        } else {
+          fraudWarning = "🚨 NGHI VẤN: Đổi máy " + usedDevicesList.length + " lần!";
+        }
+      }
+    }
+
+    // =========================================================
+    // 3. GHI DỮ LIỆU DUY NHẤT 1 LẦN VÀO SHEET
+    // =========================================================
     sheet.appendRow([
-      formattedSubmitTime, // Cột 1
-      hoTen,               // Cột 2
-      donVi,               // Cột 3
-      attendanceDate,      // Cột 4
-      status,              // Cột 5
-      absentReason,        // Cột 6
-      distance,            // Cột 7
-      deviceId,            // Cột 8
-      fraudWarning,        // Cột 9
-      latitude ? (latitude + ", " + longitude) : "", // Cột 10
-      accuracy,            // Cột 11
-      userAgent            // Cột 12
+      formattedSubmitTime, // Cột 1 (A)
+      hoTen,               // Cột 2 (B)
+      donVi,               // Cột 3 (C)
+      attendanceDate,      // Cột 4 (D)
+      status,              // Cột 5 (E)
+      absentReason,        // Cột 6 (F)
+      distance,            // Cột 7 (G)
+      deviceId,            // Cột 8 (H)
+      fraudWarning,        // Cột 9 (I)
+      latitude ? (latitude + ", " + longitude) : "", // Cột 10 (J)
+      accuracy,            // Cột 11 (K)
+      userAgent            // Cột 12 (L)
     ]);
 
-    var lastRow = sheet.getLastRow();
-    
-    // Căn giữa các cột thông tin chính
-    sheet.getRange(lastRow, 1).setHorizontalAlignment("center");
-    sheet.getRange(lastRow, 3).setHorizontalAlignment("center");
-    sheet.getRange(lastRow, 4).setHorizontalAlignment("center");
-    sheet.getRange(lastRow, 5).setHorizontalAlignment("center");
-    sheet.getRange(lastRow, 7).setHorizontalAlignment("center");
-    sheet.getRange(lastRow, 8).setHorizontalAlignment("center");
+    var newLastRow = sheet.getLastRow();
 
-    // Định dạng màu cho Trạng thái
-    var statusCell = sheet.getRange(lastRow, 5);
+    // Căn giữa các cột thông tin
+    sheet.getRange(newLastRow, 1).setHorizontalAlignment("center");
+    sheet.getRange(newLastRow, 3, 1, 3).setHorizontalAlignment("center");
+    sheet.getRange(newLastRow, 7, 1, 3).setHorizontalAlignment("center");
+
+    // Định dạng màu Trạng thái
+    var statusCell = sheet.getRange(newLastRow, 5);
     if (status === "Có mặt") {
       statusCell.setFontColor("#15803d").setFontWeight("bold");
     } else {
       statusCell.setFontColor("#b45309").setFontWeight("bold");
     }
 
-    // Nếu phát hiện trùng lặp thiết bị -> Tô đỏ cảnh báo hàng đó
-    var warningCell = sheet.getRange(lastRow, 9);
-    if (isDuplicateDevice) {
+    // Tô màu cảnh báo
+    var warningCell = sheet.getRange(newLastRow, 9);
+    if (isDuplicateDevice || isFrequentDeviceChanger) {
       warningCell.setBackground("#fee2e2").setFontColor("#b91c1c").setFontWeight("bold");
+      sheet.getRange(newLastRow, 1, 1, 12).setBackground("#fff1f2"); // Tô màu đỏ nhạt nguyên hàng
     } else {
       warningCell.setFontColor("#15803d");
     }
 
-    var response = {
+    return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       message: "Điểm danh thành công!",
-      timestamp: formattedSubmitTime,
       isDuplicateDevice: isDuplicateDevice
-    };
-
-    return ContentService.createTextOutput(JSON.stringify(response))
-      .setMimeType(ContentService.MimeType.JSON);
+    })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -132,42 +177,4 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
-}
-
-function doGet(e) {
-  if (e && e.parameter && (e.parameter.hoTen || e.parameter.donVi)) {
-    return doPost(e);
-  }
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "online",
-    message: "Google Apps Script Điểm Danh đang chạy bình thường!"
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// Khởi tạo hàng tiêu đề bảng tính
-function initHeader(sheet) {
-  var headers = [
-    "Thời gian gửi",
-    "Họ và tên",
-    "Đơn vị",
-    "Ngày điểm danh",
-    "Trạng thái",
-    "Lý do vắng mặt (nếu có)",
-    "Khoảng cách (m)",
-    "Mã thiết bị (Device ID)",
-    "Cảnh báo trùng lặp thiết bị",
-    "Tọa độ GPS (Lat, Lng)",
-    "Sai số GPS (m)",
-    "Thiết bị / Trình duyệt"
-  ];
-  sheet.appendRow(headers);
-
-  var headerRange = sheet.getRange(1, 1, 1, headers.length);
-  headerRange.setFontWeight("bold");
-  headerRange.setBackground("#047857");
-  headerRange.setFontColor("#ffffff");
-  headerRange.setHorizontalAlignment("center");
-  headerRange.setVerticalAlignment("middle");
-  sheet.setRowHeight(1, 38);
-  sheet.setFrozenRows(1);
 }
