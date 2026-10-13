@@ -6,6 +6,7 @@ Bản nâng cấp từ repo `ludarao/diemdanh` (mốc `44b1ade`). Giao diện h�
 
 - PostgreSQL trên Supabase; Vercel phục vụ trang web và API Node.js.
 - Admin đăng nhập bằng email/mật khẩu Supabase Auth, cookie HttpOnly, có đăng xuất/đổi mật khẩu.
+- Admin cấp/giao/khóa tài khoản lớp trưởng và cấp lại mật khẩu. Lớp trưởng chỉ xem dashboard lớp được giao; API và RLS chặn lớp khác và mọi thao tác quản trị/export. Cần migrations 003/004 và `SUPABASE_SERVICE_ROLE_KEY` ở server để cấp tài khoản.
 - Nhập `.xlsx` hoặc CSV theo mẫu `TT | Họ và tên | Ngày sinh | Đơn vị`; xem trước lỗi và tên trùng; thêm/sửa/ngừng sử dụng học viên. Có mẫu CSV để tải và vùng dán bảng Excel.
 - Dò tên có dấu, không phân biệt hoa/thường và khoảng trắng thừa. Không tự bỏ dấu, sửa chính tả hoặc ghép tên gần giống. Tên không khớp và tên trùng được lưu để đối chiếu thủ công.
 - Sáng đúng giờ 07:00–08:00, muộn sau 08:00 đến trước 13:30. Chiều đúng giờ 13:30–14:00, muộn sau 14:00 đến hết ngày. Dùng giờ server tại Việt Nam.

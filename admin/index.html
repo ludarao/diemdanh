@@ -28,6 +28,7 @@
         <button class="nav-item" data-view="settings">Vị trí & cài đặt</button>
         <button class="nav-item" data-view="data">Dữ liệu & xóa lớp</button>
         <button class="nav-item" data-view="audit">Nhật ký thay đổi</button>
+        <button class="nav-item" data-view="viewers">Tài khoản lớp trưởng</button>
         <button class="nav-item" data-view="account">Tài khoản</button>
       </nav>
       <div class="sidebar-bottom"><small id="userEmail"></small><button id="logoutButton">Đăng xuất</button><a href="/">Trang điểm danh học viên ↗</a></div>
@@ -35,6 +36,8 @@
     <main class="workspace">
       <header class="topbar"><div><p class="eyebrow">QUẢN LÝ ĐIỂM DANH</p><h1 id="viewTitle">Tổng quan phiên</h1></div><label class="class-picker">Lớp<select id="classSelect" aria-label="Chọn lớp"></select></label></header>
       <section id="dashboardView" class="view">
+        <div id="noAssignedClass" class="panel" hidden><h2>Chưa được giao lớp</h2><p>Liên hệ admin để được cấp quyền xem một lớp học.</p><button id="refreshPermissions">Kiểm tra quyền xem</button></div>
+        <div id="dashboardContent">
         <div class="panel toolbar"><label>Ngày<input type="date" id="dashboardDate" required></label><label>Phiên<select id="sessionSelect"></select></label><div class="toolbar-actions"><span id="connectionState" class="connection">Đang kết nối</span><button id="refreshDashboard">Làm mới</button><button id="exportButton">Xuất CSV</button></div></div>
         <div class="session-banner"><div><strong id="sessionHeading">Chưa có phiên</strong><span id="sessionDetail"></span></div><small id="updatedAt"></small></div>
         <div id="statCards" class="stat-grid"></div>
@@ -45,6 +48,7 @@
           <div class="table-heading"><div><h2 id="resultTitle">Danh sách vắng</h2><p id="resultHint" class="muted"></p></div><input id="searchInput" type="search" placeholder="Tìm họ tên hoặc đơn vị" aria-label="Tìm học viên"></div>
           <div id="resultTable" class="table-scroll"></div>
         </section>
+        </div>
       </section>
       <section id="studentsView" class="view" hidden>
         <div class="panel"><div class="section-heading"><div><h2>Nhập danh sách gốc</h2><p class="muted">Theo mẫu: TT · Họ và tên · Ngày sinh · Đơn vị. Không yêu cầu mã học viên.</p></div><button id="templateButton">Tải mẫu CSV</button></div>
@@ -80,6 +84,9 @@
         </div>
         <div class="panel danger-panel"><h2>Xóa toàn bộ dữ liệu ứng dụng</h2><p class="muted">Xóa tất cả lớp học, danh sách học viên, lịch phiên, kết quả điểm danh, lý do và nhật ký cũ. Giữ tài khoản admin và cấu trúc hệ thống để bạn đăng nhập và tạo lớp lại.</p><button type="button" class="danger" id="clearAllDataButton">Xóa toàn bộ dữ liệu</button></div>
         <p class="muted">Các nút sẽ mở bản xem trước số lượng dữ liệu trước khi xác nhận. Dữ liệu đã xóa không khôi phục trực tiếp trong ứng dụng.</p>
+      </section>
+      <section id="viewersView" class="view" hidden>
+        <div class="panel"><h2>Tài khoản lớp trưởng</h2><p class="muted">Chỉ xem Tổng quan của lớp được giao. Không được sửa, duyệt, xuất CSV hoặc xóa dữ liệu.</p><button id="createViewerButton" class="primary">Cấp tài khoản lớp trưởng</button><div id="viewerAccounts" class="table-scroll"></div></div>
       </section>
       <section id="accountView" class="view" hidden><form id="passwordForm" class="panel narrow"><h2>Đổi mật khẩu quản trị</h2><label>Mật khẩu mới<input name="password" type="password" minlength="12" autocomplete="new-password" required></label><label>Nhập lại mật khẩu<input name="confirmation" type="password" minlength="12" autocomplete="new-password" required></label><p class="muted">Sau khi đổi mật khẩu, đăng nhập lại. Nếu quên mật khẩu, quản trị project có thể đặt lại trong Supabase Authentication.</p><button class="primary" type="submit">Đổi mật khẩu</button></form></section>
     </main>

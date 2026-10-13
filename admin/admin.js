@@ -7,7 +7,8 @@ const reviewLabels={pending:'Chờ duyệt',approved:'Đã duyệt',rejected:'T�
 const fmt=value=>value?new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):'—';
 const hm=value=>new Date(value).toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit'});
 const today=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
-const state={classes:[],classId:'',view:'dashboard',filter:'absent',data:null,students:[],preview:null,newClass:false,loading:false,realtime:null,authTimer:null,dialogAction:null,deletionPreview:null};
+const state={role:'admin',viewers:[],classes:[],classId:'',view:'dashboard',filter:'absent',data:null,students:[],preview:null,newClass:false,loading:false,realtime:null,authTimer:null,dialogAction:null,deletionPreview:null};
+const canManage=()=>state.role==='admin';
 let refreshPromise=null,noticeTimer,realtimeGeneration=0,lastRealtimeSetup=0;
 const updater=createDashboardUpdater({refresh:()=>loadDashboard(true)});
 function dashboardVisible(){return !$('#appView').hidden&&state.view==='dashboard'&&!document.hidden;}
@@ -25,6 +26,7 @@ async function api(action,body=null,params={},retry=true){
     if(!refreshPromise)refreshPromise=api('refresh',{}, {},false).finally(()=>{refreshPromise=null;});
     try{await refreshPromise;return api(action,body,params,false);}catch{showLogin();}
   }
+  if(response.status===403&&!canManage()){state.data=null;$('#resultTable').innerHTML='';$('#statCards').innerHTML='';closeDialog();showLogin();}
   if(!response.ok){const error=new Error(data.message||'Không xử lý được yêu cầu.');error.status=response.status;throw error;}
   return data;
 }
@@ -36,22 +38,27 @@ function showLogin(){
   if(state.realtime){state.realtime.removeAllChannels();state.realtime=null;}
 }
 async function boot(){
-  const user=await api('me');$('#userEmail').textContent=user.email;
+  const user=await api('me');state.role=user.role||'admin';$('#userEmail').textContent=`${user.email}${canManage()?'':' · Chỉ xem'}`;
+  for(const button of document.querySelectorAll('.nav-item'))button.hidden=!canManage()&&button.dataset.view!=='dashboard';
+  $('#exportButton').hidden=!canManage();
   state.classes=await api('classes');
   for(const button of document.querySelectorAll('.nav-item'))button.disabled=!state.classes.length&&['dashboard','students','schedule'].includes(button.dataset.view);
+  $('#dashboardContent').hidden=!state.classes.length;$('#noAssignedClass').hidden=canManage()||!!state.classes.length;
   if(!state.classes.length){
     state.classId='';state.data=null;state.students=[];state.preview=null;$('#importPreview').hidden=true;
     $('#classSelect').innerHTML='<option value="">Chưa có lớp học</option>';$('#classSelect').disabled=true;
     $('#sessionSelect').innerHTML='';updater.pause();updater.setRealtimeConnected(false);clearInterval(state.authTimer);
     realtimeGeneration++;if(state.realtime){await state.realtime.removeAllChannels();state.realtime=null;}
     $('#loginView').hidden=true;$('#appView').hidden=false;
-    await openView('settings');prepareNewClass();return;
+    await openView(canManage()?'settings':'dashboard');if(canManage())prepareNewClass();return;
   }
   $('#classSelect').disabled=false;
   if(!state.classes.some(c=>c.id===state.classId))state.classId=state.classes[0].id;
   $('#classSelect').innerHTML=state.classes.map(c=>`<option value="${h(c.id)}">${h(c.name)}</option>`).join('');$('#classSelect').value=state.classId;
   $('#loginView').hidden=true;$('#appView').hidden=false;
-  await loadDashboard();fillSettings();await setupRealtime();
+  if(!canManage())state.view='dashboard';
+  await loadDashboard();if(canManage())fillSettings();await setupRealtime();
+  if(!canManage())await openView('dashboard');
   updateRefreshActivity();
   clearInterval(state.authTimer);state.authTimer=setInterval(()=>{if(dashboardVisible())setupRealtime();},45*60*1000);
 }
@@ -63,6 +70,7 @@ async function setupRealtime(){
     const cfg=await api('realtime-config');
     if(generation!==realtimeGeneration)return;
     lastRealtimeSetup=Date.now();
+    if(cfg.mode==='polling'){$('#connectionState').textContent='● Tự làm mới mỗi 15 giây';$('#connectionState').classList.remove('live');return;}
     const client=createClient(cfg.url,cfg.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
     state.realtime=client;await client.realtime.setAuth(cfg.token);
     const channel=client.channel(`attendance-${state.classId}`);
@@ -110,6 +118,7 @@ function renderResults(){
   const titles={absent:'Danh sách vắng',reason:'Vắng / đi muộn có lý do',pending:'Chưa điểm danh',duplicate:'Các nhóm trùng thiết bị',unmatched:'Đã gửi nhưng không khớp danh sách gốc',outside:'Lượt gửi chưa xác định phiên',all:'Tất cả học viên trong phiên'};
   const hints={absent:'Sau hạn đúng giờ, người chưa có mặt được tính vắng. Lượt đến muộn sẽ cập nhật lại.',reason:'Lý do được giữ riêng với kết quả có mặt. Chọn chi tiết để duyệt từng yêu cầu.',pending:'Danh sách này áp dụng trước khi hết giờ đúng giờ.',duplicate:'Cảnh báo để kiểm tra, không tự kết luận gian lận. Không cộng nhóm này vào sĩ số.',unmatched:'Giữ nguyên tên đã nhập. Tên trùng trong danh sách gốc cũng cần bạn đối chiếu.',outside:'Lượt ngoài lịch vẫn được lưu. Bạn có thể gán thủ công vào đúng phiên.',all:'Số liệu dựa trên danh sách gốc của phiên, mỗi học viên chỉ có một kết quả chính.'};
   $('#resultTitle').textContent=titles[state.filter];$('#resultHint').textContent=hints[state.filter];
+  if(!canManage())$('#resultHint').textContent={reason:'Lý do và tình trạng duyệt do admin quản lý.',outside:'Các lượt gửi ngoài phiên của lớp.',unmatched:'Các tên chưa khớp danh sách lớp.'}[state.filter]||hints[state.filter];
   if(d.roster_status==='empty')$('#resultHint').textContent='Phiên chưa có danh sách học viên. Lượt gửi vẫn được lưu; sau khi nhập danh sách đúng lớp, hệ thống sẽ tự khớp lại tên.';
   const counts={absent:d.rows.filter(r=>['absent','excused'].includes(r.status)).length,reason:d.rows.filter(r=>r.reason).length+d.unmatched.filter(r=>r.reason).length,pending:d.counts.pending||0,duplicate:d.duplicateGroups.length,unmatched:d.unmatched.length,outside:d.outside.length,all:d.rows.length};
   for(const btn of $('#resultTabs').querySelectorAll('button')){const f=btn.dataset.filter;const names={absent:'Vắng',reason:'Có lý do',pending:'Chưa điểm danh',duplicate:'Trùng thiết bị',unmatched:'Tên không khớp',outside:'Ngoài phiên',all:'Tất cả'};btn.textContent=`${names[f]} (${counts[f]})`;btn.classList.toggle('active',f===state.filter);btn.setAttribute('aria-selected',String(f===state.filter));}
@@ -118,7 +127,7 @@ function renderResults(){
     $('#resultTable').innerHTML=table(['Thiết bị','Các tên liên quan','Tình trạng','Thao tác'],groups.map(g=>[
       `<strong>${h(g.device_id)}</strong>`,g.attempts.map(a=>`<strong>${h(a.entered_name)}</strong><small>${fmt(a.received_at)}${a.student_id?'':' · Tên chưa khớp'}</small>`).join(''),
       g.resolution?`${badge('approved','Đã xử lý')}<small>${h(g.resolution)}</small>`:badge('duplicate','Cần kiểm tra'),
-      `<button data-action="device" data-id="${h(g.device_id)}">Ghi chú xử lý</button>`
+      canManage()?`<button data-action="device" data-id="${h(g.device_id)}">Ghi chú xử lý</button>`:h(g.resolution?'Đã ghi chú':'Chưa xử lý')
     ]));return;
   }
   if(['unmatched','outside'].includes(state.filter)){
@@ -126,7 +135,7 @@ function renderResults(){
     $('#resultTable').innerHTML=table(['Tên đã nhập','Đơn vị','Giờ gửi','Loại / lý do','Thiết bị','Kiểm tra'],rows.map(a=>[
       `<strong>${h(a.entered_name)}</strong><small>${a.match_state==='ambiguous'?'Tên trùng cần đối chiếu':a.match_state==='outside_session'?'Chưa xác định phiên':d.roster_status==='empty'?'Chờ danh sách của phiên':'Không khớp danh sách gốc'}</small>`,h(a.entered_unit),fmt(a.received_at),
       `${badge(a.kind==='present'?'present':'pending',a.kind==='present'?'Có mặt':'Báo vắng / muộn')}<small>${h(a.reason)}</small>`,h(a.device_id),
-      `<button data-action="reconcile" data-id="${h(a.id)}">Đối chiếu / gán lại</button>`
+      canManage()?`<button data-action="reconcile" data-id="${h(a.id)}">Đối chiếu / gán lại</button>`:`<button data-action="attempt-detail" data-id="${h(a.id)}">Chi tiết</button>`
     ]));return;
   }
   let rows=d.rows;
@@ -138,18 +147,20 @@ function renderResults(){
     h(r.ordinal||''),`<strong>${h(r.name)}</strong><small>${h(r.unit)}</small>`,`${badge(r.status)}${r.duplicate_device?'<br>'+badge('duplicate','Trùng thiết bị'):''}`,
     `${fmt(r.received_at)}${r.late_minutes?`<small>Muộn ${r.late_minutes} phút</small>`:''}`,
     `${h(r.reason||'—')}${r.reason_status?'<br>'+badge(r.reason_status,reviewLabels[r.reason_status]):''}`,
-    `<div class="table-actions"><button data-action="detail" data-id="${h(r.student_id)}">Chi tiết</button><button data-action="manual" data-id="${h(r.student_id)}">Ghi nhận</button></div>`
+    `<div class="table-actions"><button data-action="detail" data-id="${h(r.student_id)}">Chi tiết</button>${canManage()?`<button data-action="manual" data-id="${h(r.student_id)}">Ghi nhận</button>`:''}</div>`
   ]),d.session?'Không có học viên trong nhóm này.':'Chưa có phiên để thống kê.');
   if(state.filter==='reason'){
     const unmatched=d.unmatched.filter(a=>a.reason&&searchMatches(a));
-    if(unmatched.length)$('#resultTable').innerHTML+=`<div class="table-heading"><h3>Lý do từ tên chưa khớp (${unmatched.length})</h3></div>`+table(['Tên đã nhập','Lý do','Tình trạng','Thao tác'],unmatched.map(a=>[h(a.entered_name),h(a.reason),badge(a.reason_status,reviewLabels[a.reason_status]),`<button data-action="reconcile" data-id="${h(a.id)}">Đối chiếu trước</button>`]));
+    if(unmatched.length)$('#resultTable').innerHTML+=`<div class="table-heading"><h3>Lý do từ tên chưa khớp (${unmatched.length})</h3></div>`+table(['Tên đã nhập','Lý do','Tình trạng','Thao tác'],unmatched.map(a=>[h(a.entered_name),h(a.reason),badge(a.reason_status,reviewLabels[a.reason_status]),canManage()?`<button data-action="reconcile" data-id="${h(a.id)}">Đối chiếu trước</button>`:`<button data-action="attempt-detail" data-id="${h(a.id)}">Chi tiết</button>`]));
   }
 }
 async function openView(view){
-  state.view=view;const titles={dashboard:'Tổng quan phiên',students:'Danh sách lớp',schedule:'Lịch điểm danh',settings:'Vị trí & cài đặt',data:'Dữ liệu & xóa lớp',audit:'Nhật ký thay đổi',account:'Tài khoản'};
+  if(!canManage()&&view!=='dashboard')return;
+  state.view=view;const titles={dashboard:'Tổng quan phiên',students:'Danh sách lớp',schedule:'Lịch điểm danh',settings:'Vị trí & cài đặt',data:'Dữ liệu & xóa lớp',audit:'Nhật ký thay đổi',account:'Tài khoản',viewers:'Tài khoản lớp trưởng'};
   updater.pause();
   $('#viewTitle').textContent=titles[view];for(const el of document.querySelectorAll('.view'))el.hidden=el.id!==`${view}View`;for(const el of document.querySelectorAll('.nav-item'))el.classList.toggle('active',el.dataset.view===view);
   if(view==='dashboard')await loadDashboard();if(view==='students')await loadStudents();if(view==='settings'){if(state.classes.length)fillSettings();else prepareNewClass();}if(view==='data')fillDataManagement();if(view==='schedule'){$('#scheduleDate').value=$('#dashboardDate').value;fillSchedule();}if(view==='audit')await loadAudit();
+  if(view==='viewers')await loadViewers();
   updateRefreshActivity();
 }
 async function loadStudents(){
@@ -177,8 +188,39 @@ function fillSchedule(){
 }
 async function loadAudit(){
   const rows=await api('audit',null,state.classId?{class_id:state.classId}:{});
-  const names={import_students:'Nhập danh sách',save_class:'Sửa cài đặt lớp',save_schedule:'Sửa lịch ngày',reconcile:'Đối chiếu tên / phiên',review_reason:'Duyệt lý do',resolve_device:'Xử lý trùng thiết bị',save_student:'Sửa học viên',sync_roster:'Đồng bộ danh sách phiên',manual_attendance:'Ghi nhận thủ công',repair_empty_roster:'Khôi phục danh sách phiên rỗng','clear-all':'Xóa toàn bộ dữ liệu','clear-class-attendance':'Xóa kết quả điểm danh của lớp','delete-class':'Xóa lớp học'};
+  const names={import_students:'Nhập danh sách',save_class:'Sửa cài đặt lớp',save_schedule:'Sửa lịch ngày',reconcile:'Đối chiếu tên / phiên',review_reason:'Duyệt lý do',resolve_device:'Xử lý trùng thiết bị',save_student:'Sửa học viên',sync_roster:'Đồng bộ danh sách phiên',manual_attendance:'Ghi nhận thủ công',repair_empty_roster:'Khôi phục danh sách phiên rỗng','clear-all':'Xóa toàn bộ dữ liệu','clear-class-attendance':'Xóa kết quả điểm danh của lớp','delete-class':'Xóa lớp học',viewer_create:'Cấp tài khoản lớp trưởng',viewer_assign:'Giao / đổi lớp trưởng',
+    'viewer_set-enabled':'Khóa / mở tài khoản lớp trưởng','viewer_reset-password':'Cấp lại mật khẩu lớp trưởng'};
   $('#auditTable').innerHTML=table(['Thời điểm','Người thực hiện','Thao tác','Chi tiết'],rows.map(a=>[fmt(a.created_at),h(a.email||'Hệ thống'),h(names[a.action]||a.action),`<details><summary>Xem thay đổi</summary><pre>${h(JSON.stringify(a.details,null,2))}</pre></details>`]));
+}
+async function loadViewers(){
+  state.viewers=await api('viewers');
+  $('#createViewerButton').disabled=!state.classes.length;
+  $('#viewerAccounts').innerHTML=table(['Email','Lớp được giao','Trạng thái','Thao tác'],state.viewers.map(v=>[
+    h(v.email),v.classes.map(c=>h(c.name)).join(' · ')||'Chưa được giao lớp',v.enabled?'Đang hoạt động':'Đã khóa',
+    `<div class="table-actions"><button data-viewer="assign" data-id="${h(v.user_id)}">Giao / đổi lớp</button><button data-viewer="set-enabled" data-id="${h(v.user_id)}">${v.enabled?'Khóa tài khoản':'Mở khóa'}</button><button data-viewer="reset-password" data-id="${h(v.user_id)}">Cấp lại mật khẩu</button></div>`
+  ]),'Chưa có tài khoản lớp trưởng.');
+}
+function viewerClassOptions(selected=''){return state.classes.map(c=>`<option value="${h(c.id)}" ${c.id===selected?'selected':''}>${h(c.name)}</option>`).join('');}
+function viewerDialog(operation,id=null){
+  if(!canManage())return;
+  const v=state.viewers.find(v=>v.user_id===id);
+  if(operation!=='create'&&!v)return;
+  let body,title;
+  if(operation==='create'){
+    if(!state.classes.length){notice('Tạo lớp học trước khi cấp tài khoản.',true);return;}
+    title='Cấp tài khoản lớp trưởng';
+    body=`<p class="muted">Bạn tự cung cấp email/mật khẩu cho lớp trưởng. Ứng dụng không gửi email.</p><label>Email<input type="email" name="email" autocomplete="off" required></label><label>Mật khẩu được cấp<input type="password" name="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label><label>Lớp được xem<select name="class_id">${viewerClassOptions(state.classId)}</select></label>`;
+  }else if(operation==='assign'){
+    title=`Giao lớp · ${v.email}`;body=`<label>Lớp được xem<select name="class_id"><option value="">Không giao lớp — thu hồi quyền xem</option>${viewerClassOptions(v.classes[0]?.id)}</select></label><p class="muted">Thay thế quyền xem hiện tại. Tài khoản không xem được các lớp khác.</p>`;
+  }else if(operation==='set-enabled'){
+    title=`${v.enabled?'Khóa':'Mở khóa'} · ${v.email}`;body=`<p>${v.enabled?'Tài khoản sẽ bị chặn ở yêu cầu tiếp theo; dữ liệu lớp được giữ.':'Cho phép tài khoản đăng nhập và xem lớp được giao.'}</p>`;
+  }else{
+    title=`Cấp lại mật khẩu · ${v.email}`;body='<label>Mật khẩu mới được cấp<input type="password" name="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label><p class="muted">Tự chuyển mật khẩu mới cho lớp trưởng. Nếu cần chặn truy cập ngay, khóa tài khoản trước.</p>';
+  }
+  openDialog(title,body,async values=>{
+    await api('save-viewer',{...values,operation,...(id?{user_id:id}:{}),...(operation==='set-enabled'?{enabled:!v.enabled}:{})});
+    closeDialog();await loadViewers();notice('Đã cập nhật tài khoản lớp trưởng.');return {handled:true};
+  });
 }
 function openDialog(title,body,action,button='Lưu'){$('#dialogTitle').textContent=title;$('#dialogBody').innerHTML=body;state.dialogAction=action;state.deletionPreview=null;$('#confirmDialog').textContent=button;$('#confirmDialog').hidden=!action;$('#confirmDialog').disabled=false;$('#confirmDialog').className='primary';if(!$('#actionDialog').open)$('#actionDialog').showModal();}
 function closeDialog(){$('#actionDialog').close();state.dialogAction=null;state.deletionPreview=null;}
@@ -201,7 +243,7 @@ function syncDeleteConfirmation(){
 async function openDeletionDialog(operation){
   const params={operation};if(operation!=='clear-all')params.class_id=state.classId;
   const p=await api('deletion-preview',null,params);
-  const labels={classes:'Lớp học',students:'Học viên (kể cả đã ngừng sử dụng)',sessions:'Phiên điểm danh',roster_entries:'Dòng danh sách phiên',attendance_attempts:'Lượt điểm danh / báo lý do',attempts_with_reason:'Trong đó có lý do',device_notes:'Ghi chú xử lý trùng thiết bị',audit_logs:'Nhật ký cũ'};
+  const labels={classes:'Lớp học',students:'Học viên (kể cả đã ngừng sử dụng)',sessions:'Phiên điểm danh',roster_entries:'Dòng danh sách phiên',attendance_attempts:'Lượt điểm danh / báo lý do',attempts_with_reason:'Trong đó có lý do',device_notes:'Ghi chú xử lý trùng thiết bị',audit_logs:'Nhật ký cũ',class_permissions:'Quyền xem lớp của lớp trưởng'};
   openDialog(p.title,`<p class="error">Dữ liệu bị xóa vĩnh viễn khỏi ứng dụng.</p>${table(['Dữ liệu sẽ xóa','Số lượng'],Object.entries(p.will_delete).map(([key,count])=>[h(labels[key]),h(count)]))}<p class="muted">${h(p.retained)}</p><label class="checkbox"><input type="checkbox" id="acknowledgeDelete" name="acknowledged">Tôi đã kiểm tra phạm vi và hiểu dữ liệu bị xóa</label><label>Nhập chính xác: <strong>${h(p.confirmation_phrase)}</strong><input id="deleteConfirmation" name="confirmation" autocomplete="off" required></label>`,async values=>{
     try{
       await api('delete-data',{operation:p.operation,class_id:p.class_id,preview_hash:p.preview_hash,confirmation:values.confirmation,acknowledged:values.acknowledged==='on'});
@@ -217,6 +259,8 @@ async function openDeletionDialog(operation){
 function recordBy(id){return [...(state.data?.unmatched||[]),...(state.data?.outside||[]),...(state.data?.rows||[]).flatMap(r=>r.history)].find(a=>a.id===id);}
 async function actionClick(event){
   const btn=event.target.closest('[data-action]');if(!btn)return;const id=btn.dataset.id,action=btn.dataset.action;
+  if(!canManage()&&!['detail','attempt-detail'].includes(action))return;
+  if(action==='attempt-detail'){const a=recordBy(id);if(!a)return;openDialog(`Lượt gửi · ${a.entered_name}`,`<p>${h(a.entered_unit)}</p><p>${fmt(a.received_at)}</p><p>${h(a.reason||'Không có lý do')}</p><p>${h(a.device_id)}</p>${a.reason?badge(a.reason_status,reviewLabels[a.reason_status]):''}`,null);return;}
   if(action==='student'){editStudent(state.students.find(s=>s.id===id));return;}
   if(action==='device'){
     const g=state.data.duplicateGroups.find(g=>g.device_id===id);
@@ -233,7 +277,7 @@ async function actionClick(event){
   }
   if(action==='detail'){
     const r=state.data.rows.find(r=>r.student_id===id);
-    openDialog(`Lịch sử · ${r.name}`,`<p>${h(r.unit)}</p>${r.history.length?r.history.map(a=>`<div class="history"><strong>${h(a.entered_name)} · ${a.kind==='present'?'Có mặt':'Báo vắng / muộn'}</strong><small>${fmt(a.received_at)} · ${h(a.device_id)}</small><p>${h(a.reason||'Không có lý do')}</p>${a.reason?`${badge(a.reason_status,reviewLabels[a.reason_status])} <button type="button" data-review="approved" data-id="${h(a.id)}">Duyệt</button> <button type="button" data-review="rejected" data-id="${h(a.id)}">Từ chối</button>`:''}<small>Khoảng cách ${a.distance==null?'—':Math.round(a.distance)+'m'} · Sai số ${a.accuracy==null?'—':a.accuracy+'m'}</small></div>`).join(''):'<p>Chưa có lượt gửi.</p>'}`,null);
+    openDialog(`Lịch sử · ${r.name}`,`<p>${h(r.unit)}</p>${r.history.length?r.history.map(a=>`<div class="history"><strong>${h(a.entered_name)} · ${a.kind==='present'?'Có mặt':'Báo vắng / muộn'}</strong><small>${fmt(a.received_at)} · ${h(a.device_id)}</small><p>${h(a.reason||'Không có lý do')}</p>${a.reason?`${badge(a.reason_status,reviewLabels[a.reason_status])}${canManage()?` <button type="button" data-review="approved" data-id="${h(a.id)}">Duyệt</button> <button type="button" data-review="rejected" data-id="${h(a.id)}">Từ chối</button>`:''}`:''}<small>Khoảng cách ${a.distance==null?'—':Math.round(a.distance)+'m'} · Sai số ${a.accuracy==null?'—':a.accuracy+'m'}</small></div>`).join(''):'<p>Chưa có lượt gửi.</p>'}`,null);
     for(const button of $('#dialogBody').querySelectorAll('[data-review]'))button.addEventListener('click',()=>run(button,async()=>{await api('review-reason',{id:button.dataset.id,status:button.dataset.review});closeDialog();await loadDashboard();notice('Đã cập nhật tình trạng duyệt.');}));return;
   }
   if(action==='manual'){
@@ -245,6 +289,9 @@ async function actionClick(event){
 function editStudent(s=null){
   openDialog(s?'Sửa học viên':'Thêm học viên',`<label>TT<input type="number" name="ordinal" min="1" value="${h(s?.ordinal||'')}"></label><label>Họ và tên<input name="name" required value="${h(s?.name||'')}"></label><label>Ngày sinh<input type="date" name="birth_date" value="${h(s?.birth_date?String(s.birth_date).slice(0,10):'')}"></label><label>Đơn vị<input name="unit" value="${h(s?.unit||'')}"></label>${s?'<label class="checkbox"><input name="inactive" type="checkbox">Ngừng sử dụng trong danh sách hiện hành</label>':''}<p class="muted">Sửa danh sách gốc không tự sửa danh sách của phiên đã có lượt gửi. Dùng Đồng bộ nếu muốn áp dụng cho phiên.</p>`,async values=>{await api('save-student',{class_id:state.classId,id:s?.id,...values,active:!values.inactive});await loadStudents();});
 }
+$('#createViewerButton').addEventListener('click',()=>viewerDialog('create'));
+$('#viewerAccounts').addEventListener('click',event=>{const b=event.target.closest('[data-viewer]');if(b)viewerDialog(b.dataset.viewer,b.dataset.id);});
+$('#refreshPermissions').addEventListener('click',()=>run($('#refreshPermissions'),()=>boot()));
 $('#loginForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{$('#loginError').textContent='';try{await api('login',Object.fromEntries(new FormData(event.target)),{},false);event.target.elements.password.value='';await boot();}catch(e){$('#loginError').textContent=e.message;}});});
 $('#logoutButton').addEventListener('click',()=>run($('#logoutButton'),async()=>{await api('logout',{});showLogin();}));
 for(const btn of document.querySelectorAll('.nav-item'))btn.addEventListener('click',()=>run(null,()=>openView(btn.dataset.view)));

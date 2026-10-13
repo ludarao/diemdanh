@@ -6,7 +6,9 @@ const store=require('../lib/store');
 const auth=require('../lib/auth');
 const {previewImport,csv}=require('../lib/import');
 const {previewDeletion,deleteData}=require('../lib/delete-data');
-const mutationActions=new Set(['login','refresh','logout','attendance','preview-import','import','save-class','save-schedule','reconcile','review-reason','resolve-device','change-password','save-student','sync-roster','manual-attendance','delete-data']);
+const {authorize,visibleClasses,roleOf}=require('../lib/permissions');
+const {listViewers,saveViewer}=require('../lib/viewer-accounts');
+const mutationActions=new Set(['login','refresh','logout','attendance','preview-import','import','save-class','save-schedule','reconcile','review-reason','resolve-device','change-password','save-student','sync-roster','manual-attendance','delete-data','save-viewer']);
 function createHandler(dependencies={}){
   return async function handler(req,res){
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
@@ -32,9 +34,12 @@ function createHandler(dependencies={}){
         return json(res,await store.submit(db,input.classId||url.searchParams.get('class'),input));
       }
       const actor=dependencies.requireAdmin?await dependencies.requireAdmin(db,req):await auth.requireAdmin(db,req);
+      await authorize(db,actor,action,url);
       switch(action){
-        case 'me':return json(res,{email:actor.email});
-        case 'classes':return json(res,(await db.query('SELECT * FROM classes ORDER BY is_default DESC,name')).rows);
+        case 'me':return json(res,{email:actor.email,role:roleOf(actor)});
+        case 'classes':return json(res,await visibleClasses(db,actor));
+        case 'viewers':return json(res,await listViewers(db,actor));
+        case 'save-viewer':return json(res,await saveViewer(db,input,actor,dependencies.adminAuth));
         case 'students':return json(res,await store.listStudents(db,store.uuid(url.searchParams.get('class_id'))));
         case 'dashboard':return json(res,await store.dashboard(db,url.searchParams.get('class_id'),url.searchParams.get('day')||vnDate(),url.searchParams.get('session_id')));
         case 'preview-import':return json(res,await previewImport(input));
@@ -50,7 +55,7 @@ function createHandler(dependencies={}){
         case 'deletion-preview':return json(res,await previewDeletion(db,url.searchParams.get('operation'),url.searchParams.get('class_id')));
         case 'delete-data':return json(res,await deleteData(db,input,actor.user_id));
         case 'audit':return json(res,(await db.query('SELECT a.*,u.email FROM audit_logs a LEFT JOIN admin_users u ON u.user_id=a.actor_id WHERE a.class_id=$1 OR a.class_id IS NULL ORDER BY a.created_at DESC LIMIT 100',[url.searchParams.get('class_id')?store.uuid(url.searchParams.get('class_id')):null])).rows);
-        case 'realtime-config':return json(res,{url:process.env.SUPABASE_URL,key:process.env.SUPABASE_ANON_KEY,token:actor.token});
+        case 'realtime-config':if(roleOf(actor)==='class_viewer')return json(res,{mode:'polling'});return json(res,{url:process.env.SUPABASE_URL,key:process.env.SUPABASE_ANON_KEY,token:actor.token});
         case 'change-password':{
           if(typeof input.password!=='string'||input.password.length<12||input.password.length>1024)throw new AppError('Mật khẩu mới cần ít nhất 12 ký tự.');
           const client=auth.authClient();const {error:sessionError}=await client.auth.setSession({access_token:actor.token,refresh_token:auth.cookies(req).attendance_refresh});

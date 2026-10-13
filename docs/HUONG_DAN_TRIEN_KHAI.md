@@ -19,7 +19,9 @@ Có hai cách, chọn một:
 **Qua SQL Editor của Supabase:** lần lượt chạy toàn bộ:
 
 1. `migrations/001_core.sql` — bảng, index và lớp mặc định.
-2. `migrations/002_supabase_security.sql` — RLS, quyền đọc Realtime chỉ cho admin.
+2. `migrations/002_supabase_security.sql` — RLS và đăng ký Realtime.
+3. `migrations/003_class_viewers.sql` — vai trò tài khoản và quyền xem theo lớp; tài khoản cũ giữ vai trò admin.
+4. `migrations/004_class_viewers_security.sql` — giới hạn đọc Supabase theo vai trò/lớp được giao.
 
 **Qua máy tính:**
 
@@ -34,6 +36,7 @@ cp .env.example .env.local
 DATABASE_URL=postgresql://postgres.PROJECT_REF:MAT_KHAU_DA_URL_ENCODE@POOLER_HOST:6543/postgres
 SUPABASE_URL=https://PROJECT_REF.supabase.co
 SUPABASE_ANON_KEY=PUBLISHABLE_HOAC_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY=SERVICE_ROLE_KEY_CHI_O_SERVER
 APP_ORIGIN=http://localhost:3000
 DATABASE_SSL=require
 PORT=3000
@@ -89,7 +92,7 @@ Nếu chưa điền database/Auth, ứng dụng hiển thị lỗi chưa cấu h
 2. Vào Vercel, import repo hoặc cập nhật project hiện tại.
 3. Framework Preset: **Other**. Node.js: **22.x hoặc mới hơn**.
 4. Build command: `npm run build`; Output directory: `dist`. File `vercel.json` đã đặt các giá trị này cùng route `/api` và `/admin`.
-5. Thêm biến môi trường **Production**: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DATABASE_SSL=require`, và `DATABASE_CA_CERT` nếu cần.
+5. Thêm biến môi trường **Production**: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (để cấp tài khoản lớp trưởng), `DATABASE_SSL=require`, và `DATABASE_CA_CERT` nếu cần.
 6. Đặt `APP_ORIGIN` bằng đúng origin website sẽ dùng, ví dụ `https://ten-project.vercel.app`, không thêm `/admin` hoặc dấu `/` cuối. API ghi dữ liệu chỉ nhận yêu cầu từ origin này.
 7. Deploy. Nếu chỉ biết URL sau lần deploy đầu, cập nhật `APP_ORIGIN` rồi redeploy.
 8. Nếu dùng domain riêng, dùng domain đó trong `APP_ORIGIN` và luôn truy cập bằng domain đó. Với Preview Deployment, dùng môi trường Supabase thử nghiệm riêng và `APP_ORIGIN` tương ứng để không ghi vào dữ liệu thật.
@@ -130,13 +133,30 @@ Tọa độ/bán kính mặc định giữ từ repo: 13.993095, 107.997195, 100
 - Xuất Sheet cũ ra CSV để sao lưu trước khi chuyển URL. Bản này hỗ trợ nhập danh sách gốc; lịch sử điểm danh Sheet cũ cần đối chiếu phiên/ngày riêng, không được tự suy diễn. Chưa có bộ nhập lịch sử Sheet cũ tự động.
 - Chỉ bỏ webhook cũ khỏi triển khai đang dùng sau khi lớp thử đạt yêu cầu. Giữ bản xuất lịch sử để đối chiếu.
 
+## Tài khoản lớp trưởng — chỉ xem theo lớp
+
+Admin mở **Tài khoản lớp trưởng → Cấp tài khoản lớp trưởng**, nhập email, mật khẩu ít nhất 12 ký tự và chọn lớp. Bạn tự chuyển thông tin đăng nhập cho lớp trưởng; ứng dụng không gửi email và không lưu mật khẩu trong bảng/nhật ký. Lớp trưởng đăng nhập ở `/admin`, chỉ thấy Tổng quan của lớp được giao, lọc ngày/phiên, tìm kiếm và xem chi tiết. Không có quyền xuất CSV, sửa/duyệt/gán kết quả, quản lý danh sách/lịch/vị trí hoặc xóa dữ liệu. Không tự đổi mật khẩu; admin cấp lại khi cần.
+
+**Cấu hình khóa để tạo/cấp lại mật khẩu:**
+
+1. Mở Supabase project → Settings → API Keys. Lấy khóa server `service_role` trong phần Legacy API Keys (hoặc secret key server tương ứng). Không dùng anon/publishable key cho chức năng này. [Tài liệu tạo tài khoản của Supabase](https://supabase.com/docs/reference/javascript/auth-admin-createuser).
+2. Mở Vercel project → Settings → Environment Variables, thêm tên `SUPABASE_SERVICE_ROLE_KEY` với giá trị khóa đó, chọn **Production** (và Preview nếu bạn dùng môi trường này).
+3. Redeploy deployment mới nhất để server nhận biến. Không đưa khóa vào frontend, Git hoặc chat.
+4. Chạy đủ migrations 003 và 004 trước khi cấp tài khoản (`npm run migrate` tự bỏ qua phiên bản đã áp dụng). Nếu dùng SQL Editor thì chạy hai file theo thứ tự. Thiếu migration sẽ bị chặn cấp tài khoản; thiếu khóa sẽ có thông báo cấu hình server.
+
+Trong danh sách tài khoản, admin có **Giao / đổi lớp**, **Khóa / mở khóa**, **Cấp lại mật khẩu**. Chọn “Không giao lớp” để thu hồi quyền xem mà giữ tài khoản. Việc khóa/gỡ/chuyển lớp được kiểm tra lại ở mỗi API; nếu đang xem lớp vừa bị thu hồi, yêu cầu tiếp theo bị chặn và cần đăng nhập lại. Nội dung đã tải trước đó không thể thu hồi khỏi máy người dùng. Cấp lại mật khẩu không hứa hẹn hủy ngay access token cũ; nếu cần chặn ngay, khóa tài khoản trước.
+
+Lớp trưởng dùng đối chiếu mỗi **15 giây**, dừng khi tab ẩn; nút Làm mới tải ngay. Không cấp token Realtime qua API cho lớp trưởng. Quyền RLS vẫn giới hạn truy vấn trực tiếp tới đúng lớp. Admin giữ Realtime như trước. Chưa có lớp được giao thì hiện thông báo và nút kiểm tra quyền; xóa lớp tự gỡ liên kết quyền xem. Xóa toàn bộ dữ liệu giữ cả tài khoản admin/lớp trưởng, nhưng lớp trưởng cần được giao lớp mới.
+
+Kiểm thử bằng ít nhất hai lớp: lớp trưởng A không thấy B qua API hoặc Supabase, không gọi được mọi API sửa/xóa/export, và mất quyền sau khóa/gỡ lớp; admin vẫn quản lý toàn hệ thống. Các thao tác cấp/giao/khóa/reset có nhật ký, không ghi mật khẩu.
+
 ## Xóa dữ liệu và lớp học
 
 Trong admin, mở **Dữ liệu & xóa lớp**. Chọn đúng lớp ở đầu trang trước khi dùng nút theo lớp.
 
 - **Xóa dữ liệu điểm danh của lớp**: xóa mọi lượt điểm danh/báo lý do, ghi chú xử lý thiết bị và nhật ký cũ của lớp; giữ danh sách học viên, phiên/lịch và cấu hình vị trí.
 - **Xóa lớp học này**: xóa lớp, danh sách học viên, mọi phiên/lịch, kết quả và nhật ký của lớp. Các lớp khác được giữ.
-- **Xóa toàn bộ dữ liệu**: xóa tất cả lớp và dữ liệu liên quan, nhật ký cũ và bộ đếm giới hạn request. Giữ tài khoản admin, cấu trúc database và lịch sử migration để vẫn đăng nhập được.
+- **Xóa toàn bộ dữ liệu**: xóa tất cả lớp và dữ liệu liên quan, nhật ký cũ và bộ đếm giới hạn request. Giữ tài khoản đăng nhập, cấu trúc database và lịch sử migration để vẫn đăng nhập được.
 
 Mỗi lần xóa có bảng số lượng xem trước, yêu cầu đánh dấu đồng ý và nhập chính xác câu xác nhận. Nếu có dữ liệu mới từ lúc xem trước, hệ thống yêu cầu xem lại và xác nhận lại. Xóa diễn ra trong một transaction; lỗi giữa chừng sẽ hoàn tác. Một nhật ký mới ghi nhận thao tác xóa được giữ để kiểm tra. Ứng dụng không có nút hoàn tác; xuất/sao lưu dữ liệu cần giữ trước khi xác nhận.
 

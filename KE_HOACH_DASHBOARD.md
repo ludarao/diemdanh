@@ -177,10 +177,12 @@ Chưa ước tính chi phí hosting hoặc cam kết tốc độ trước khi bi
 - Trang `/admin`: đăng nhập mật khẩu, dashboard, Excel/CSV xem trước, thêm/sửa học viên, đối chiếu tên, đồng bộ danh sách phiên, ghi nhận thủ công, duyệt lý do, trùng thiết bị, lịch ngày, tọa độ/bán kính, đổi mật khẩu và nhật ký.
 - Kết quả chính mỗi học viên/phiên được tính từ lịch sử gửi, không cần bảng kết quả bị trùng. Giữ mọi lượt gửi cùng khóa idempotency.
 - Mẫu Excel đã được đọc thành công: 80 dòng dữ liệu, bốn cột, không có lỗi nhập hoặc tên trùng theo quy tắc chuẩn hóa. File thật chỉ giữ trong thư mục `.local/` bị loại khỏi Git và bản build.
-- Bản hiện tại dùng quyền admin toàn ứng dụng; phân quyền giảng viên theo từng lớp là phần mở rộng chưa triển khai.
+- Có hai vai trò: admin toàn ứng dụng và lớp trưởng chỉ xem Tổng quan của lớp được giao. Admin cấp/giao/khóa tài khoản và cấp lại mật khẩu. Phân quyền giảng viên sửa từng lớp vẫn chưa triển khai.
 - Lịch mặc định tự tạo khi có truy cập trong ngày. Có thể tạo trước theo ngày trong admin; chưa có thao tác tạo hàng loạt theo khoảng ngày hoặc thêm phiên thứ ba.
 - Chưa nhập lịch sử Google Sheets vì chưa có file lịch sử và quy tắc đối chiếu; dữ liệu lịch sử cũ không tự chuyển.
 - Supabase Auth/Realtime và cấu hình Vercel cần kiểm chứng trên tài khoản/project thật sau bước cấu hình của người dùng.
 - Sửa lỗi phiên tạo trước danh sách: tự phục hồi snapshot rỗng và khớp lại tên chính xác/duy nhất trong các lượt đã gửi. Giữ nguyên tên nhập, giờ nhận, lý do và trạng thái duyệt; snapshot đã có học viên không bị thay thế tự động. Không cần migration mới.
 
 - Bổ sung Dữ liệu & xóa lớp: xóa kết quả của từng lớp giữ danh sách/lịch/cài đặt; xóa lớp cùng toàn bộ dữ liệu lớp; hoặc xóa tất cả dữ liệu lớp học. Giữ tài khoản admin và cấu trúc hệ thống. Có xem trước số lượng, nhập câu xác nhận, kiểm tra dữ liệu thay đổi và transaction hoàn tác khi lỗi; cho tạo lớp mới sau khi xóa lớp cuối cùng.
+
+- Triển khai lớp trưởng chỉ đọc: bảng class_viewers, vai trò trên admin_users, migration 003/004, kiểm tra API/RLS theo lớp; khóa/gỡ quyền kiểm tra mỗi request. Lớp trưởng không sửa, duyệt, xuất CSV hoặc xóa; chỉ xem chi tiết và lọc dashboard. Giữ giao diện học viên gốc.
