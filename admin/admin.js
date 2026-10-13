@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createDashboardUpdater, isRelevantDashboardChange } from './live-refresh.mjs';
 const $=selector=>document.querySelector(selector);
 const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels={present:'Đúng giờ',late:'Đi muộn',pending:'Chưa điểm danh',excused:'Vắng có phép',absent:'Vắng không phép',cancelled:'Phiên hủy'};
@@ -6,8 +7,16 @@ const reviewLabels={pending:'Chờ duyệt',approved:'Đã duyệt',rejected:'T�
 const fmt=value=>value?new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):'—';
 const hm=value=>new Date(value).toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit'});
 const today=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
-const state={classes:[],classId:'',view:'dashboard',filter:'absent',data:null,students:[],preview:null,newClass:false,loading:false,realtime:null,poll:null,authTimer:null,dialogAction:null};
-let refreshPromise=null,noticeTimer,refreshTimer;
+const state={classes:[],classId:'',view:'dashboard',filter:'absent',data:null,students:[],preview:null,newClass:false,loading:false,realtime:null,authTimer:null,dialogAction:null};
+let refreshPromise=null,noticeTimer,realtimeGeneration=0,lastRealtimeSetup=0;
+const updater=createDashboardUpdater({refresh:()=>loadDashboard(true)});
+function dashboardVisible(){return !$('#appView').hidden&&state.view==='dashboard'&&!document.hidden;}
+function updateRefreshActivity(refreshNow=false){
+  if(dashboardVisible()){
+    updater.resume({refreshNow});
+    if(lastRealtimeSetup&&Date.now()-lastRealtimeSetup>=45*60*1000)setupRealtime();
+  }else updater.pause();
+}
 async function api(action,body=null,params={},retry=true){
   const q=new URLSearchParams({action,...params});
   const response=await fetch(`/api?${q}`,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
@@ -22,7 +31,8 @@ async function api(action,body=null,params={},retry=true){
 function notice(message,error=false){$('#notice').textContent=message;$('#notice').className=`notice${error?' error':''}`;$('#notice').hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>{$('#notice').hidden=true;},6000);}
 async function run(button,fn){if(button)button.disabled=true;try{return await fn();}catch(e){notice(e.message,true);}finally{if(button)button.disabled=false;}}
 function showLogin(){
-  $('#loginView').hidden=false;$('#appView').hidden=true;clearInterval(state.poll);clearInterval(state.authTimer);state.poll=null;
+  $('#loginView').hidden=false;$('#appView').hidden=true;updater.pause();updater.setRealtimeConnected(false);clearInterval(state.authTimer);
+  realtimeGeneration++;
   if(state.realtime){state.realtime.removeAllChannels();state.realtime=null;}
 }
 async function boot(){
@@ -33,22 +43,30 @@ async function boot(){
   $('#classSelect').innerHTML=state.classes.map(c=>`<option value="${h(c.id)}">${h(c.name)}</option>`).join('');$('#classSelect').value=state.classId;
   $('#loginView').hidden=true;$('#appView').hidden=false;
   await loadDashboard();fillSettings();await setupRealtime();
-  clearInterval(state.poll);state.poll=setInterval(()=>{if(state.view==='dashboard'&&!document.hidden)loadDashboard(true);},2500);
-  clearInterval(state.authTimer);state.authTimer=setInterval(()=>setupRealtime(),45*60*1000);
+  updateRefreshActivity();
+  clearInterval(state.authTimer);state.authTimer=setInterval(()=>{if(dashboardVisible())setupRealtime();},45*60*1000);
 }
 async function setupRealtime(){
+  const generation=++realtimeGeneration;
+  updater.setRealtimeConnected(false);
   try{
     if(state.realtime){await state.realtime.removeAllChannels();state.realtime=null;}
     const cfg=await api('realtime-config');
+    if(generation!==realtimeGeneration)return;
+    lastRealtimeSetup=Date.now();
     const client=createClient(cfg.url,cfg.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
     state.realtime=client;await client.realtime.setAuth(cfg.token);
     const channel=client.channel(`attendance-${state.classId}`);
-    const changed=()=>{clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>{if(state.view==='dashboard')loadDashboard(true);},100);};
+    const changed=payload=>{
+      if(isRelevantDashboardChange(payload,{classId:state.classId,day:$('#dashboardDate').value,sessionId:$('#sessionSelect').value}))updater.notifyChange();
+    };
     for(const table of ['attendance_attempts','sessions'])channel.on('postgres_changes',{event:'*',schema:'public',table,filter:`class_id=eq.${state.classId}`},changed);
     channel.subscribe(status=>{
-      const live=status==='SUBSCRIBED';$('#connectionState').textContent=live?'● Đang cập nhật trực tiếp':'● Tự làm mới mỗi 2,5 giây';$('#connectionState').classList.toggle('live',live);
+      if(generation!==realtimeGeneration)return;
+      const live=status==='SUBSCRIBED';$('#connectionState').textContent=live?'● Đang cập nhật trực tiếp':'● Tự làm mới mỗi 15 giây';$('#connectionState').classList.toggle('live',live);
+      updater.setRealtimeConnected(live);
     });
-  }catch{$('#connectionState').textContent='● Tự làm mới mỗi 2,5 giây';$('#connectionState').classList.remove('live');}
+  }catch{if(generation!==realtimeGeneration)return;lastRealtimeSetup=Date.now();updater.setRealtimeConnected(false);$('#connectionState').textContent='● Tự làm mới mỗi 15 giây';$('#connectionState').classList.remove('live');}
 }
 async function loadDashboard(quiet=false){
   if(state.loading){state.reloadRequested=true;return;}
@@ -60,17 +78,18 @@ async function loadDashboard(quiet=false){
     const d=await api('dashboard',null,params);
     if(requestedClass!==state.classId||requestedDay!==$('#dashboardDate').value||requestedSession!==$('#sessionSelect').value){state.reloadRequested=true;return;}
     state.data=d;
+    updater.loaded(d.sessions,d.server_time);
     const sessionOptions=d.sessions.map(s=>`<option value="${h(s.id)}">${h(s.name)} · ${hm(s.opens_at)}–${hm(s.deadline_at)}</option>`).join('');
     if($('#sessionSelect').innerHTML!==sessionOptions)$('#sessionSelect').innerHTML=sessionOptions;
     if(d.session)$('#sessionSelect').value=d.session.id;
     $('#sessionHeading').textContent=d.session?`${d.session.name} · ${d.phase}`:'Chưa có phiên cho ngày này';
-    $('#sessionDetail').textContent=d.session?`Đúng giờ ${hm(d.session.opens_at)}–${hm(d.session.deadline_at)} · Nhận muộn đến ${hm(d.session.accepts_until)} · Bán kính ${d.session.radius}m`:'Tạo lịch trong mục Lịch điểm danh.';
+    $('#sessionDetail').textContent=d.session?`Đúng giờ ${hm(d.session.opens_at)}–${hm(d.session.deadline_at)} · Nhận muộn đến ${hm(d.session.accepts_until)} · Bán kính ${d.session.radius}m${d.roster_status==='empty'?' · Chưa có danh sách học viên: nhập danh sách cho đúng lớp.':''}`:'Tạo lịch trong mục Lịch điểm danh.';
     $('#updatedAt').textContent=`Cập nhật ${fmt(d.server_time)}`;
     const cards=[['total','Sĩ số',''],['present','Đúng giờ','positive'],['late','Đi muộn','warning'],['pending','Chưa điểm danh',''],['excused','Vắng có phép',''],['absent','Vắng không phép','danger']];
     $('#statCards').innerHTML=cards.map(([key,label,color])=>`<div class="stat-card ${color}"><small>${label}</small><strong>${d.counts[key]||0}</strong></div>`).join('');
     renderResults();
   }catch(e){$('#connectionState').textContent='● Mất kết nối · dữ liệu chưa cập nhật';$('#connectionState').classList.remove('live');if(!quiet)notice(e.message,true);}
-  finally{state.loading=false;if(state.reloadRequested){state.reloadRequested=false;queueMicrotask(()=>loadDashboard(true));}}
+  finally{state.loading=false;if(state.reloadRequested){state.reloadRequested=false;if(dashboardVisible())queueMicrotask(()=>loadDashboard(true));}}
 }
 function table(headers,rows,empty='Không có bản ghi trong danh sách này.'){
   return rows.length?`<table><thead><tr>${headers.map(x=>`<th>${h(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:`<div class="empty">${h(empty)}</div>`;
@@ -82,6 +101,7 @@ function renderResults(){
   const titles={absent:'Danh sách vắng',reason:'Vắng / đi muộn có lý do',pending:'Chưa điểm danh',duplicate:'Các nhóm trùng thiết bị',unmatched:'Đã gửi nhưng không khớp danh sách gốc',outside:'Lượt gửi chưa xác định phiên',all:'Tất cả học viên trong phiên'};
   const hints={absent:'Sau hạn đúng giờ, người chưa có mặt được tính vắng. Lượt đến muộn sẽ cập nhật lại.',reason:'Lý do được giữ riêng với kết quả có mặt. Chọn chi tiết để duyệt từng yêu cầu.',pending:'Danh sách này áp dụng trước khi hết giờ đúng giờ.',duplicate:'Cảnh báo để kiểm tra, không tự kết luận gian lận. Không cộng nhóm này vào sĩ số.',unmatched:'Giữ nguyên tên đã nhập. Tên trùng trong danh sách gốc cũng cần bạn đối chiếu.',outside:'Lượt ngoài lịch vẫn được lưu. Bạn có thể gán thủ công vào đúng phiên.',all:'Số liệu dựa trên danh sách gốc của phiên, mỗi học viên chỉ có một kết quả chính.'};
   $('#resultTitle').textContent=titles[state.filter];$('#resultHint').textContent=hints[state.filter];
+  if(d.roster_status==='empty')$('#resultHint').textContent='Phiên chưa có danh sách học viên. Lượt gửi vẫn được lưu; sau khi nhập danh sách đúng lớp, hệ thống sẽ tự khớp lại tên.';
   const counts={absent:d.rows.filter(r=>['absent','excused'].includes(r.status)).length,reason:d.rows.filter(r=>r.reason).length+d.unmatched.filter(r=>r.reason).length,pending:d.counts.pending||0,duplicate:d.duplicateGroups.length,unmatched:d.unmatched.length,outside:d.outside.length,all:d.rows.length};
   for(const btn of $('#resultTabs').querySelectorAll('button')){const f=btn.dataset.filter;const names={absent:'Vắng',reason:'Có lý do',pending:'Chưa điểm danh',duplicate:'Trùng thiết bị',unmatched:'Tên không khớp',outside:'Ngoài phiên',all:'Tất cả'};btn.textContent=`${names[f]} (${counts[f]})`;btn.classList.toggle('active',f===state.filter);btn.setAttribute('aria-selected',String(f===state.filter));}
   if(state.filter==='duplicate'){
@@ -95,7 +115,7 @@ function renderResults(){
   if(['unmatched','outside'].includes(state.filter)){
     const rows=(state.filter==='outside'?d.outside:d.unmatched).filter(searchMatches);
     $('#resultTable').innerHTML=table(['Tên đã nhập','Đơn vị','Giờ gửi','Loại / lý do','Thiết bị','Kiểm tra'],rows.map(a=>[
-      `<strong>${h(a.entered_name)}</strong><small>${a.match_state==='ambiguous'?'Tên trùng cần đối chiếu':a.match_state==='outside_session'?'Chưa xác định phiên':'Không khớp danh sách gốc'}</small>`,h(a.entered_unit),fmt(a.received_at),
+      `<strong>${h(a.entered_name)}</strong><small>${a.match_state==='ambiguous'?'Tên trùng cần đối chiếu':a.match_state==='outside_session'?'Chưa xác định phiên':d.roster_status==='empty'?'Chờ danh sách của phiên':'Không khớp danh sách gốc'}</small>`,h(a.entered_unit),fmt(a.received_at),
       `${badge(a.kind==='present'?'present':'pending',a.kind==='present'?'Có mặt':'Báo vắng / muộn')}<small>${h(a.reason)}</small>`,h(a.device_id),
       `<button data-action="reconcile" data-id="${h(a.id)}">Đối chiếu / gán lại</button>`
     ]));return;
@@ -118,8 +138,10 @@ function renderResults(){
 }
 async function openView(view){
   state.view=view;const titles={dashboard:'Tổng quan phiên',students:'Danh sách lớp',schedule:'Lịch điểm danh',settings:'Vị trí & cài đặt',audit:'Nhật ký thay đổi',account:'Tài khoản'};
+  updater.pause();
   $('#viewTitle').textContent=titles[view];for(const el of document.querySelectorAll('.view'))el.hidden=el.id!==`${view}View`;for(const el of document.querySelectorAll('.nav-item'))el.classList.toggle('active',el.dataset.view===view);
   if(view==='dashboard')await loadDashboard();if(view==='students')await loadStudents();if(view==='settings')fillSettings();if(view==='schedule'){$('#scheduleDate').value=$('#dashboardDate').value;fillSchedule();}if(view==='audit')await loadAudit();
+  updateRefreshActivity();
 }
 async function loadStudents(){
   state.students=await api('students',null,{class_id:state.classId});$('#studentCount').textContent=`Danh sách gốc · ${state.students.length} học viên`;
@@ -146,7 +168,7 @@ function fillSchedule(){
 }
 async function loadAudit(){
   const rows=await api('audit',null,{class_id:state.classId});
-  const names={import_students:'Nhập danh sách',save_class:'Sửa cài đặt lớp',save_schedule:'Sửa lịch ngày',reconcile:'Đối chiếu tên / phiên',review_reason:'Duyệt lý do',resolve_device:'Xử lý trùng thiết bị',save_student:'Sửa học viên',sync_roster:'Đồng bộ danh sách phiên',manual_attendance:'Ghi nhận thủ công'};
+  const names={import_students:'Nhập danh sách',save_class:'Sửa cài đặt lớp',save_schedule:'Sửa lịch ngày',reconcile:'Đối chiếu tên / phiên',review_reason:'Duyệt lý do',resolve_device:'Xử lý trùng thiết bị',save_student:'Sửa học viên',sync_roster:'Đồng bộ danh sách phiên',manual_attendance:'Ghi nhận thủ công',repair_empty_roster:'Khôi phục danh sách phiên rỗng'};
   $('#auditTable').innerHTML=table(['Thời điểm','Người thực hiện','Thao tác','Chi tiết'],rows.map(a=>[fmt(a.created_at),h(a.email||'Hệ thống'),h(names[a.action]||a.action),`<details><summary>Xem thay đổi</summary><pre>${h(JSON.stringify(a.details,null,2))}</pre></details>`]));
 }
 function openDialog(title,body,action,button='Lưu'){$('#dialogTitle').textContent=title;$('#dialogBody').innerHTML=body;state.dialogAction=action;$('#confirmDialog').textContent=button;$('#confirmDialog').hidden=!action;$('#actionDialog').showModal();}
@@ -199,7 +221,7 @@ $('#templateButton').addEventListener('click',()=>{location.href='/api?action=te
 $('#exportButton').addEventListener('click',()=>{location.href=`/api?${new URLSearchParams({action:'export',class_id:state.classId,day:$('#dashboardDate').value,session_id:$('#sessionSelect').value})}`;});
 $('#rosterFile').addEventListener('change',event=>run(null,async()=>{const file=event.target.files[0];if(!file)return;if(file.size>2*1024*1024)throw new Error('File tối đa 2 MB.');const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Không đọc được file.'));reader.readAsDataURL(file);});await preview({filename:file.name,base64});}));
 $('#previewPaste').addEventListener('click',()=>run($('#previewPaste'),()=>preview({paste:$('#rosterPaste').value})));
-$('#commitImport').addEventListener('click',()=>run($('#commitImport'),async()=>{if(!state.preview||state.preview.errors.length)throw new Error('Kiểm tra lỗi nhập danh sách.');if(!$('#confirmImport').checked)throw new Error('Đánh dấu xác nhận sau khi kiểm tra danh sách.');const result=await api('import',{class_id:state.classId,rows:state.preview.rows,mode:$('#importMode').value});$('#importPreview').hidden=true;state.preview=null;await loadStudents();await loadDashboard();notice(`Đã nhập ${result.imported} học viên. Các phiên đã có lượt gửi giữ danh sách cũ cho đến khi bạn đồng bộ.`);}));
+$('#commitImport').addEventListener('click',()=>run($('#commitImport'),async()=>{if(!state.preview||state.preview.errors.length)throw new Error('Kiểm tra lỗi nhập danh sách.');if(!$('#confirmImport').checked)throw new Error('Đánh dấu xác nhận sau khi kiểm tra danh sách.');const result=await api('import',{class_id:state.classId,rows:state.preview.rows,mode:$('#importMode').value});$('#importPreview').hidden=true;state.preview=null;await loadStudents();await loadDashboard();notice(`Đã nhập ${result.imported} học viên.${result.repaired_sessions ? ` Đã khôi phục ${result.repaired_sessions} phiên rỗng và khớp lại ${result.linked_attempts} lượt gửi.` : " Phiên đã có danh sách giữ lịch sử; dùng Đồng bộ nếu cần cập nhật."}`);}));
 $('#syncRosterButton').addEventListener('click',()=>{if(!state.data?.session){notice('Chọn một phiên trong Tổng quan trước.',true);return;}const s=state.data.session;openDialog(`Đồng bộ danh sách · ${s.name}`,`<p>Áp dụng danh sách gốc hiện hành cho phiên ${h(s.name)} ngày ${h($('#dashboardDate').value)}. Tên khớp chính xác và duy nhất sẽ được liên kết lại; tên gần giống vẫn cần kiểm tra. Học viên ngừng sử dụng đã có lượt gửi vẫn giữ trong lịch sử.</p><label>Lý do đồng bộ<textarea name="note" required rows="3"></textarea></label>`,async values=>{await api('sync-roster',{session_id:s.id,note:values.note});});});
 $('#scheduleDate').addEventListener('change',()=>run(null,async()=>{$('#dashboardDate').value=$('#scheduleDate').value;$('#sessionSelect').innerHTML='';await loadDashboard();fillSchedule();}));
 $('#scheduleForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{const form=event.target,input={...Object.fromEntries(new FormData(form)),class_id:state.classId,cancelled:form.elements.cancelled.checked};try{await api('save-schedule',input);}catch(e){if(e.status!==409)throw e;openDialog('Xác nhận đổi lịch đã có dữ liệu',`<p>${h(e.message)}</p><p>Giờ nhận gốc được giữ. Các lượt gửi sẽ được phân lại theo lịch mới và kết quả đi muộn được tính lại; thao tác có nhật ký.</p>`,async()=>{await api('save-schedule',{...input,confirm_changes:true});},'Xác nhận đổi lịch');return;}$('#dashboardDate').value=input.day;$('#sessionSelect').innerHTML='';await loadDashboard();notice('Đã lưu lịch ngày này.');});});
@@ -207,6 +229,6 @@ $('#settingsForm').addEventListener('submit',event=>{event.preventDefault();run(
 $('#newClassButton').addEventListener('click',()=>{state.newClass=true;$('#settingsForm').reset();const f=$('#settingsForm').elements;for(const [k,v] of Object.entries({latitude:13.993095,longitude:107.997195,radius:100,max_accuracy:150,morning_open:'07:00',morning_deadline:'08:00',afternoon_open:'13:30',afternoon_deadline:'14:00'}))f[k].value=v;f.auto_daily.checked=true;f.is_default.checked=false;$('#attendanceLink').textContent='Nhập tên và mã liên kết lớp mới rồi lưu.';});
 $('#locateClassButton').addEventListener('click',()=>{if(!navigator.geolocation){notice('Trình duyệt không hỗ trợ GPS.',true);return;}$('#locateClassButton').disabled=true;navigator.geolocation.getCurrentPosition(position=>{const f=$('#settingsForm').elements;f.latitude.value=position.coords.latitude;f.longitude.value=position.coords.longitude;$('#locationInfo').textContent=`Sai số GPS ±${Math.round(position.coords.accuracy)}m. Kiểm tra tọa độ rồi bấm Lưu cài đặt.`;$('#locateClassButton').disabled=false;},error=>{$('#locateClassButton').disabled=false;notice(`Không lấy được GPS: ${error.message}`,true);},{enableHighAccuracy:true,timeout:12000,maximumAge:0});});
 $('#passwordForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{const f=event.target.elements;if(f.password.value!==f.confirmation.value)throw new Error('Hai mật khẩu chưa khớp.');await api('change-password',{password:f.password.value});event.target.reset();showLogin();notice('Đã đổi mật khẩu. Vui lòng đăng nhập lại.');});});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.poll)loadDashboard(true);});
+document.addEventListener('visibilitychange',()=>updateRefreshActivity(true));
 $('#dashboardDate').value=today();$('#scheduleDate').value=today();
 boot().catch(error=>{showLogin();if(error.status!==401)$('#loginError').textContent=error.message;});

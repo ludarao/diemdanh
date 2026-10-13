@@ -103,7 +103,7 @@ Không chỉ upload `dist/` lên hosting tĩnh: ứng dụng cần `api/`, `lib/
 3. Lớp mặc định dùng URL gốc. Nếu có nhiều lớp, dùng liên kết hiện trong admin dạng `/?class=ma-lop` khi tạo QR; học viên không phải chọn lớp/phiên trên form.
 4. Vào **Danh sách lớp**, chọn `MAU_DS_LOP.xlsx` hoặc một file cùng cấu trúc. Bộ đọc tìm sheet chứa cột “Họ và tên”, bỏ qua sheet rỗng. Nhận đúng bốn cột **TT, Họ và tên, Ngày sinh, Đơn vị**.
 5. Kiểm tra bản xem trước, tên trùng và lỗi ngày sinh. Chọn thay thế/thêm vào danh sách, đánh dấu xác nhận rồi nhập.
-6. Phiên chưa có lượt gửi được đồng bộ khi nhập. Với phiên đã có lượt gửi, chọn phiên ở Tổng quan rồi dùng **Đồng bộ danh sách vào phiên đang chọn** nếu cần áp dụng; nhập lý do để lưu nhật ký.
+6. Phiên chưa có lượt gửi được đồng bộ khi nhập. Phiên bị rỗng do tạo trước lúc nhập danh sách được tự phục hồi, kể cả đã có lượt gửi; tên chính xác và duy nhất được khớp lại mà không đổi thời gian/lý do gốc. Với phiên đã có danh sách và có lượt gửi, chọn phiên ở Tổng quan rồi dùng **Đồng bộ danh sách vào phiên đang chọn** nếu cần áp dụng; nhập lý do để lưu nhật ký.
 7. Vào **Lịch điểm danh** để chỉnh giờ một ngày hoặc đánh dấu ngày nghỉ. Mặc định tự tạo sáng/chiều theo mẫu khi có truy cập trong ngày; không tự dựng lịch sử những ngày hoàn toàn không có truy cập. Với ngày cần thống kê bắt buộc, tạo lịch trước trong admin.
 
 Tọa độ/bán kính mặc định giữ từ repo: 13.993095, 107.997195, 100m; sai số GPS tối đa 150m. Hãy kiểm tra lại tại phòng học trước sử dụng. Khi áp dụng vị trí mới cho phiên đang chạy, học viên bấm Quét lại nếu trang đang giữ cài đặt cũ; server luôn kiểm tra theo cấu hình đã lưu.
@@ -124,7 +124,7 @@ Tọa độ/bán kính mặc định giữ từ repo: 13.993095, 107.997195, 100
 - Dùng một lớp thử, tài khoản thử; gửi đúng tên, sai tên, hai người cùng thiết bị, thử sáng và chiều.
 - Kiểm tra tên sai xuất hiện trong danh sách riêng và chưa làm học viên gốc thành có mặt.
 - Kiểm tra đúng giờ/muộn ở ranh giới, báo vắng rồi đến lớp, duyệt và từ chối lý do.
-- Mở hai cửa sổ admin: lượt gửi mới được cập nhật trực tiếp. Nếu Realtime chưa bật, polling 2,5 giây vẫn hoạt động; xem trạng thái trên dashboard.
+- Mở hai cửa sổ admin: lượt gửi mới được cập nhật trực tiếp, có gộp sự kiện để giảm request. Khi Realtime kết nối, đối chiếu mỗi 60 giây; nếu chưa bật/mất kết nối, dự phòng mỗi 15 giây. Hết giờ đúng giờ tự tải lại một lần dù không có lượt gửi mới. Tab ẩn và các mục quản trị khác ngừng tự gọi API dashboard; khi quay lại tải dữ liệu mới.
 - Kiểm tra người chưa đăng nhập không đọc/sửa dữ liệu admin, thử GPS ngoài bán kính và sai số quá lớn.
 - Đo độ trễ ghi và dashboard khi nhiều học viên gửi đồng thời với quy mô lớp thực tế. Bộ test PGlite cục bộ không xác nhận giới hạn tải production.
 - Xuất Sheet cũ ra CSV để sao lưu trước khi chuyển URL. Bản này hỗ trợ nhập danh sách gốc; lịch sử điểm danh Sheet cũ cần đối chiếu phiên/ngày riêng, không được tự suy diễn. Chưa có bộ nhập lịch sử Sheet cũ tự động.
@@ -141,4 +141,5 @@ Tọa độ/bán kính mặc định giữ từ repo: 13.993095, 107.997195, 100
 | Realtime không kết nối | Migration 002, publication `supabase_realtime`, cấu hình Realtime project; polling vẫn dự phòng |
 | Import không thấy danh sách | File `.xlsx`/CSV, cột “Họ và tên”, tối đa 2 MB và 3000 học viên mỗi lượt |
 | Tên có dấu nhưng không khớp | So lại dấu/thứ tự từ, tên danh sách phiên, mục tên trùng |
+| Có tên trong lớp nhưng Tổng quan hiện Tất cả (0) | Bản mới tự phục hồi danh sách phiên rỗng khi làm mới dashboard, không cần migration hoặc điểm danh lại. Kiểm tra lớp đang chọn trùng lớp đã nhập danh sách; nếu phiên đã có danh sách nhưng thiếu học viên mới, dùng Đồng bộ danh sách |
 | Điểm danh bị GPS từ chối sau đổi vị trí | Bấm Quét lại để tải cấu hình mới và lấy vị trí mới |

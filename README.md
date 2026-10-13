@@ -12,7 +12,7 @@ Bản nâng cấp từ repo `ludarao/diemdanh` (mốc `44b1ade`). Giao diện h�
 - Lịch mặc định theo lớp, tự tạo hai phiên trong ngày khi có truy cập; chỉnh riêng từng ngày/ngày nghỉ trên admin. Phiên chỉ xuất hiện ở admin.
 - Dashboard theo lớp/ngày/phiên: vắng, có lý do, chưa điểm danh, trùng thiết bị, tên không khớp, ngoài phiên. Có duyệt lý do, ghi nhận thủ công, đối chiếu tên, xuất CSV và nhật ký.
 - Chỉnh tọa độ, lấy GPS hiện tại, bán kính cho phép, ngưỡng sai số GPS trong admin. Server tính lại khoảng cách; giữ cấu hình đã áp dụng ở từng lượt gửi.
-- Supabase Realtime khi được cấu hình; tự làm mới 2,5 giây làm cơ chế dự phòng và để cập nhật khi hết giờ dù không có lượt gửi mới.
+- Supabase Realtime khi được cấu hình; đối chiếu mỗi 60 giây khi đang kết nối, dự phòng mỗi 15 giây khi mất Realtime. Gộp sự kiện theo đợt, tự cập nhật ở mốc mở/hết giờ, dừng gọi API dashboard khi tab ẩn hoặc đang ở mục quản trị khác.
 
 ## Chạy và triển khai
 
@@ -47,6 +47,7 @@ npm run build
 - Ngày do học viên chọn được giữ như thông tin khai báo. Giờ server quyết định phiên, đúng giờ và muộn.
 - Lượt ngoài lịch vẫn được lưu sau kiểm tra đầu vào/GPS tương ứng, admin có thể gán lại phiên. Lượt có mặt ngoài bán kính hoặc GPS vượt ngưỡng sẽ bị từ chối như luồng điểm danh gốc.
 - Thay danh sách lớp không âm thầm xóa lịch sử phiên đã điểm danh. Admin chọn “Đồng bộ danh sách vào phiên đang chọn” để áp dụng rõ ràng; thao tác có nhật ký.
+- Ngoại lệ sửa lỗi: nếu phiên được tạo khi danh sách lớp còn rỗng, hệ thống tự điền danh sách cho phiên rỗng và khớp lại các lượt đã gửi theo tên chính xác, duy nhất. Không cần gửi lại điểm danh; giờ gửi, tên nhập, lý do và tình trạng duyệt được giữ. Bản cũ có snapshot rỗng được phục hồi khi mở dashboard của phiên; các snapshot đã có học viên vẫn giữ lịch sử.
 - Tài khoản trong `admin_users` là quản trị toàn bộ ứng dụng. Phiên bản này chưa có vai trò giảng viên giới hạn theo từng lớp.
 
 ## Cấu trúc

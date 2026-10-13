@@ -21,7 +21,7 @@ Luồng đã chốt: học viên mở trang/QR chung, nhập tên và gửi đi�
 
 Server giữ khóa đặc quyền trong biến môi trường. Không cho trang học viên tự ghi trạng thái, thời gian hoặc đọc danh sách cả lớp. Giảng viên chỉ xem/sửa lớp được phân công; quản trị quản lý danh sách và phân quyền. Dùng RLS và kiểm tra quyền trên API.
 
-Bản triển khai dùng Supabase Postgres Changes với RLS cho admin, lọc theo lớp; khi kết nối lại tải snapshot mới. Có polling 2,5 giây để cập nhật khi phiên đóng và dự phòng khi mất realtime. Mục tiêu cập nhật Realtime trong 1–2 giây khi kết nối tốt, phải kiểm chứng bằng đo tải.
+Bản triển khai dùng Supabase Postgres Changes với RLS cho admin, lọc theo lớp và kiểm tra ngày/phiên; khi kết nối lại tải snapshot mới. Đối chiếu mỗi 60 giây khi Realtime kết nối, dự phòng mỗi 15 giây khi mất kết nối; tải một lần ở mốc giờ của phiên, gộp các sự kiện gần nhau. Tab ẩn/mục khác dừng tự gọi API dashboard. Mục tiêu cập nhật Realtime trong vài giây khi kết nối tốt, phải kiểm chứng bằng đo tải.
 
 Tài liệu tham khảo: https://supabase.com/docs/guides/realtime/subscribing-to-database-changes ; https://supabase.com/docs/guides/database/postgres/row-level-security
 
@@ -181,3 +181,4 @@ Chưa ước tính chi phí hosting hoặc cam kết tốc độ trước khi bi
 - Lịch mặc định tự tạo khi có truy cập trong ngày. Có thể tạo trước theo ngày trong admin; chưa có thao tác tạo hàng loạt theo khoảng ngày hoặc thêm phiên thứ ba.
 - Chưa nhập lịch sử Google Sheets vì chưa có file lịch sử và quy tắc đối chiếu; dữ liệu lịch sử cũ không tự chuyển.
 - Supabase Auth/Realtime và cấu hình Vercel cần kiểm chứng trên tài khoản/project thật sau bước cấu hình của người dùng.
+- Sửa lỗi phiên tạo trước danh sách: tự phục hồi snapshot rỗng và khớp lại tên chính xác/duy nhất trong các lượt đã gửi. Giữ nguyên tên nhập, giờ nhận, lý do và trạng thái duyệt; snapshot đã có học viên không bị thay thế tự động. Không cần migration mới.
