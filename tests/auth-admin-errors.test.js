@@ -5,7 +5,7 @@ const {createTestDb,seed}=require('./helpers');const {saveViewer,checkViewerAuth
 function jwt(role,ref='projecta'){return `header.${Buffer.from(JSON.stringify({role,ref})).toString('base64url')}.signature`;}
 test('Phát hiện khóa publishable/anon, JWT sai vai trò và khóa khác project trước khi gọi Auth',()=>{
   const env={SUPABASE_URL:'https://projecta.supabase.co',SUPABASE_ANON_KEY:'public-key'};
-  for(const key of ['', 'public-key','sb_publishable_test',jwt('anon'),jwt('service_role','projectb')]){
+  for(const key of ['', 'public-key','sb_publishable_test',jwt('anon'),jwt('service_role','projectb'), 'sb_secret_fake\nwrapped', 'sb_secret_fake…', 'service_role']){
     assert.throws(()=>validateAdminAuthConfig({...env,SUPABASE_SERVICE_ROLE_KEY:key}),e=>e.status===503);
   }
   const key=jwt('service_role');assert.equal(validateAdminAuthConfig({...env,SUPABASE_SERVICE_ROLE_KEY:` ${key}\n`}).key,key);
@@ -23,7 +23,9 @@ test('Lỗi từ Supabase được phân biệt, không biến lỗi khóa serve
     [{code:'email_address_invalid',status:400},400,/email/],
     [{code:'email_provider_disabled',status:403},503,/đang tắt/],
     [{code:'over_request_rate_limit',status:429},429,/giới hạn/],
-    [{code:'unexpected_failure',status:500},502,/Auth Logs/]
+    [{code:'unexpected_failure',status:500},502,/Auth Logs/],
+    [{name:'AuthRetryableFetchError',status:0,message:'fetch failed'},502,/Server chưa gửi/],
+    [{name:'AuthRetryableFetchError',status:0,message:'Invalid character in header content'},503,/HTTP header/]
   ]){const result=authAdminError(error,'create');assert.equal(result.status,status);assert.match(result.message,pattern);}
 });
 test('Không đưa email, mật khẩu, khóa hoặc thông báo Auth thô vào API/logs',t=>{
