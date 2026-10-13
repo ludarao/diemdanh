@@ -130,6 +130,18 @@ Tọa độ/bán kính mặc định giữ từ repo: 13.993095, 107.997195, 100
 - Xuất Sheet cũ ra CSV để sao lưu trước khi chuyển URL. Bản này hỗ trợ nhập danh sách gốc; lịch sử điểm danh Sheet cũ cần đối chiếu phiên/ngày riêng, không được tự suy diễn. Chưa có bộ nhập lịch sử Sheet cũ tự động.
 - Chỉ bỏ webhook cũ khỏi triển khai đang dùng sau khi lớp thử đạt yêu cầu. Giữ bản xuất lịch sử để đối chiếu.
 
+## Xóa dữ liệu và lớp học
+
+Trong admin, mở **Dữ liệu & xóa lớp**. Chọn đúng lớp ở đầu trang trước khi dùng nút theo lớp.
+
+- **Xóa dữ liệu điểm danh của lớp**: xóa mọi lượt điểm danh/báo lý do, ghi chú xử lý thiết bị và nhật ký cũ của lớp; giữ danh sách học viên, phiên/lịch và cấu hình vị trí.
+- **Xóa lớp học này**: xóa lớp, danh sách học viên, mọi phiên/lịch, kết quả và nhật ký của lớp. Các lớp khác được giữ.
+- **Xóa toàn bộ dữ liệu**: xóa tất cả lớp và dữ liệu liên quan, nhật ký cũ và bộ đếm giới hạn request. Giữ tài khoản admin, cấu trúc database và lịch sử migration để vẫn đăng nhập được.
+
+Mỗi lần xóa có bảng số lượng xem trước, yêu cầu đánh dấu đồng ý và nhập chính xác câu xác nhận. Nếu có dữ liệu mới từ lúc xem trước, hệ thống yêu cầu xem lại và xác nhận lại. Xóa diễn ra trong một transaction; lỗi giữa chừng sẽ hoàn tác. Một nhật ký mới ghi nhận thao tác xóa được giữ để kiểm tra. Ứng dụng không có nút hoàn tác; xuất/sao lưu dữ liệu cần giữ trước khi xác nhận.
+
+Nếu xóa lớp cuối cùng/toàn bộ lớp, admin chuyển sang màn hình tạo lớp mới. Tạo lớp rồi nhập lại danh sách; lớp đầu tiên tự là lớp mặc định. Không cần migration hoặc biến môi trường mới cho chức năng này.
+
 ## Xử lý lỗi thường gặp
 
 | Biểu hiện | Kiểm tra |

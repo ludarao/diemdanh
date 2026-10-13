@@ -5,7 +5,8 @@ const {AppError,vnDate}=require('../lib/domain');
 const store=require('../lib/store');
 const auth=require('../lib/auth');
 const {previewImport,csv}=require('../lib/import');
-const mutationActions=new Set(['login','refresh','logout','attendance','preview-import','import','save-class','save-schedule','reconcile','review-reason','resolve-device','change-password','save-student','sync-roster','manual-attendance']);
+const {previewDeletion,deleteData}=require('../lib/delete-data');
+const mutationActions=new Set(['login','refresh','logout','attendance','preview-import','import','save-class','save-schedule','reconcile','review-reason','resolve-device','change-password','save-student','sync-roster','manual-attendance','delete-data']);
 function createHandler(dependencies={}){
   return async function handler(req,res){
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
@@ -46,7 +47,9 @@ function createHandler(dependencies={}){
         case 'save-student':return json(res,await store.saveStudent(db,input,actor.user_id));
         case 'sync-roster':return json(res,await store.syncRoster(db,input,actor.user_id));
         case 'manual-attendance':return json(res,await store.manualAttendance(db,input,actor.user_id));
-        case 'audit':return json(res,(await db.query('SELECT a.*,u.email FROM audit_logs a LEFT JOIN admin_users u ON u.user_id=a.actor_id WHERE a.class_id=$1 ORDER BY a.created_at DESC LIMIT 100',[store.uuid(url.searchParams.get('class_id'))])).rows);
+        case 'deletion-preview':return json(res,await previewDeletion(db,url.searchParams.get('operation'),url.searchParams.get('class_id')));
+        case 'delete-data':return json(res,await deleteData(db,input,actor.user_id));
+        case 'audit':return json(res,(await db.query('SELECT a.*,u.email FROM audit_logs a LEFT JOIN admin_users u ON u.user_id=a.actor_id WHERE a.class_id=$1 OR a.class_id IS NULL ORDER BY a.created_at DESC LIMIT 100',[url.searchParams.get('class_id')?store.uuid(url.searchParams.get('class_id')):null])).rows);
         case 'realtime-config':return json(res,{url:process.env.SUPABASE_URL,key:process.env.SUPABASE_ANON_KEY,token:actor.token});
         case 'change-password':{
           if(typeof input.password!=='string'||input.password.length<12||input.password.length>1024)throw new AppError('Mật khẩu mới cần ít nhất 12 ký tự.');

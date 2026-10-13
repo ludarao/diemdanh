@@ -26,6 +26,7 @@
         <button class="nav-item" data-view="students">Danh sách lớp</button>
         <button class="nav-item" data-view="schedule">Lịch điểm danh</button>
         <button class="nav-item" data-view="settings">Vị trí & cài đặt</button>
+        <button class="nav-item" data-view="data">Dữ liệu & xóa lớp</button>
         <button class="nav-item" data-view="audit">Nhật ký thay đổi</button>
         <button class="nav-item" data-view="account">Tài khoản</button>
       </nav>
@@ -72,6 +73,14 @@
         </form>
       </section>
       <section id="auditView" class="view" hidden><div class="panel"><h2>100 thay đổi gần nhất</h2><div id="auditTable" class="table-scroll"></div></div></section>
+      <section id="dataView" class="view" hidden>
+        <div class="panel danger-panel"><h2>Dữ liệu của lớp đang chọn</h2><p id="deleteClassLabel" class="muted"></p>
+          <div class="delete-option"><div><h3>Xóa kết quả điểm danh của lớp</h3><p class="muted">Xóa các lượt điểm danh, lý do, ghi chú xử lý thiết bị và nhật ký liên quan. Giữ danh sách học viên, lịch phiên và cài đặt lớp.</p></div><button type="button" class="danger" id="clearClassAttendanceButton">Xóa dữ liệu điểm danh của lớp</button></div>
+          <div class="delete-option"><div><h3>Xóa lớp học</h3><p class="muted">Xóa lớp cùng danh sách học viên, lịch phiên và toàn bộ dữ liệu của lớp. Các lớp khác được giữ. Bạn có thể tạo lại lớp sau.</p></div><button type="button" class="danger" id="deleteClassButton">Xóa lớp học này</button></div>
+        </div>
+        <div class="panel danger-panel"><h2>Xóa toàn bộ dữ liệu ứng dụng</h2><p class="muted">Xóa tất cả lớp học, danh sách học viên, lịch phiên, kết quả điểm danh, lý do và nhật ký cũ. Giữ tài khoản admin và cấu trúc hệ thống để bạn đăng nhập và tạo lớp lại.</p><button type="button" class="danger" id="clearAllDataButton">Xóa toàn bộ dữ liệu</button></div>
+        <p class="muted">Các nút sẽ mở bản xem trước số lượng dữ liệu trước khi xác nhận. Dữ liệu đã xóa không khôi phục trực tiếp trong ứng dụng.</p>
+      </section>
       <section id="accountView" class="view" hidden><form id="passwordForm" class="panel narrow"><h2>Đổi mật khẩu quản trị</h2><label>Mật khẩu mới<input name="password" type="password" minlength="12" autocomplete="new-password" required></label><label>Nhập lại mật khẩu<input name="confirmation" type="password" minlength="12" autocomplete="new-password" required></label><p class="muted">Sau khi đổi mật khẩu, đăng nhập lại. Nếu quên mật khẩu, quản trị project có thể đặt lại trong Supabase Authentication.</p><button class="primary" type="submit">Đổi mật khẩu</button></form></section>
     </main>
   </div>

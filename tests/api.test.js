@@ -9,13 +9,15 @@ async function request(url,{method='GET',body,origin='http://localhost:3000'}={}
   await createHandler({db})(req,res);return {...res,json:JSON.parse(res.body)};
 }
 test('Ẩn danh không đọc danh sách, dashboard hoặc nhật ký và không sửa admin',async()=>{
-  for(const action of ['classes','students','dashboard','audit','realtime-config']){const r=await request(`/api?action=${action}`);assert.equal(r.statusCode,401);}
-  for(const action of ['save-class','save-schedule','import','reconcile','review-reason','save-student','sync-roster']){const r=await request(`/api?action=${action}`,{method:'POST',body:{}});assert.equal(r.statusCode,401);}
+  for(const action of ['classes','students','dashboard','audit','realtime-config','deletion-preview']){const r=await request(`/api?action=${action}`);assert.equal(r.statusCode,401);}
+  for(const action of ['save-class','save-schedule','import','reconcile','review-reason','save-student','sync-roster','delete-data']){const r=await request(`/api?action=${action}`,{method:'POST',body:{}});assert.equal(r.statusCode,401);}
 });
 test('API quản trị từ nguồn khác bị từ chối và GET không được ghi dữ liệu',async()=>{
   assert.equal((await request('/api?action=save-class',{method:'POST',origin:'https://evil.test'})).statusCode,403);
   assert.equal((await request('/api?action=save-class')).statusCode,405);
   assert.equal((await request('/api?action=attendance',{method:'POST',origin:null})).statusCode,403);
+  assert.equal((await request('/api?action=delete-data')).statusCode,405);
+  assert.equal((await request('/api?action=delete-data',{method:'POST',origin:'https://evil.test'})).statusCode,403);
 });
 test('API công khai chỉ trả tọa độ/bán kính, không lộ danh sách/mật khẩu/khóa DB',async()=>{
   const r=await request('/api?action=config');assert.equal(r.statusCode,200);assert.equal(r.json.ALLOWED_RADIUS_METERS,100);

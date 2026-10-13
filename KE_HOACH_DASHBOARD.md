@@ -182,3 +182,5 @@ Chưa ước tính chi phí hosting hoặc cam kết tốc độ trước khi bi
 - Chưa nhập lịch sử Google Sheets vì chưa có file lịch sử và quy tắc đối chiếu; dữ liệu lịch sử cũ không tự chuyển.
 - Supabase Auth/Realtime và cấu hình Vercel cần kiểm chứng trên tài khoản/project thật sau bước cấu hình của người dùng.
 - Sửa lỗi phiên tạo trước danh sách: tự phục hồi snapshot rỗng và khớp lại tên chính xác/duy nhất trong các lượt đã gửi. Giữ nguyên tên nhập, giờ nhận, lý do và trạng thái duyệt; snapshot đã có học viên không bị thay thế tự động. Không cần migration mới.
+
+- Bổ sung Dữ liệu & xóa lớp: xóa kết quả của từng lớp giữ danh sách/lịch/cài đặt; xóa lớp cùng toàn bộ dữ liệu lớp; hoặc xóa tất cả dữ liệu lớp học. Giữ tài khoản admin và cấu trúc hệ thống. Có xem trước số lượng, nhập câu xác nhận, kiểm tra dữ liệu thay đổi và transaction hoàn tác khi lỗi; cho tạo lớp mới sau khi xóa lớp cuối cùng.

@@ -14,6 +14,8 @@ Bản nâng cấp từ repo `ludarao/diemdanh` (mốc `44b1ade`). Giao diện h�
 - Chỉnh tọa độ, lấy GPS hiện tại, bán kính cho phép, ngưỡng sai số GPS trong admin. Server tính lại khoảng cách; giữ cấu hình đã áp dụng ở từng lượt gửi.
 - Supabase Realtime khi được cấu hình; đối chiếu mỗi 60 giây khi đang kết nối, dự phòng mỗi 15 giây khi mất Realtime. Gộp sự kiện theo đợt, tự cập nhật ở mốc mở/hết giờ, dừng gọi API dashboard khi tab ẩn hoặc đang ở mục quản trị khác.
 
+- Mục **Dữ liệu & xóa lớp**: xóa kết quả điểm danh của một lớp (giữ danh sách/lịch/cài đặt), xóa cả một lớp, hoặc xóa toàn bộ dữ liệu lớp học. Xem số lượng trước khi xóa, nhập câu xác nhận và đánh dấu đồng ý; giữ tài khoản admin để tạo lại lớp.
+
 ## Chạy và triển khai
 
 Đọc [hướng dẫn cấu hình Supabase và Vercel](docs/HUONG_DAN_TRIEN_KHAI.md). Cần Node.js 22 hoặc mới hơn.
