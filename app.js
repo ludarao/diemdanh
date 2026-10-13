@@ -10,7 +10,7 @@
     CLASSROOM_LNG: 107.997314,
     ALLOWED_RADIUS_METERS: 100,
     MAX_GPS_ACCURACY_METERS: 150,
-    GOOGLE_SCRIPT_WEBHOOK_URL: "",
+    API_URL: "/api",
     STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V2",
     LOCK_STORAGE_KEY: "ATTENDANCE_DEVICE_LOCK_V2"
   };
@@ -18,6 +18,10 @@
   // Trạng thái hiện tại
   let currentStatus = "Có mặt"; // "Có mặt" hoặc "Vắng có lý do"
   let currentDeviceId = "";
+  let settingsReady = false;
+  let activeClassId = null;
+  const apiUrl = config.API_URL || "/api";
+  const classHint = new URLSearchParams(window.location.search).get("class");
 
   let currentUserLocation = {
     lat: null,
@@ -68,6 +72,8 @@
   // 1. Khởi tạo ứng dụng
   // 1. Khởi tạo ứng dụng
   async function init() {
+    const footerLabel = document.querySelector(".app-footer > div");
+    if (footerLabel) footerLabel.textContent = "Hệ thống Điểm danh GPS";
     if (config.APP_TITLE && appTitleEl) appTitleEl.textContent = config.APP_TITLE;
     if (config.SUB_TITLE && appSubtitleEl) appSubtitleEl.textContent = config.SUB_TITLE;
 
@@ -89,15 +95,34 @@
     // Thiết lập sự kiện chuyển đổi Có mặt / Vắng
     setupStatusSwitcher();
 
-    // Bắt đầu quét GPS
-    requestGpsLocation();
+    // Load the admin-managed classroom settings without changing the original form.
+    try {
+      await loadClassSettings();
+      settingsReady = true;
+      requestGpsLocation();
+    } catch (error) {
+      updateGpsUI("error", "Chưa tải được cài đặt lớp", error.message);
+      btnSubmit.disabled = true;
+      btnSubmitText.textContent = "Bấm Quét lại để kết nối";
+    }
 
     // Gán sự kiện cho form & nút quét lại GPS
-    if (btnRefreshGps) btnRefreshGps.addEventListener("click", () => requestGpsLocation(true));
+    if (btnRefreshGps) btnRefreshGps.addEventListener("click", async () => {
+      try { await loadClassSettings(); settingsReady = true; requestGpsLocation(true); }
+      catch (error) { settingsReady = false; updateGpsUI("error", "Chưa tải được cài đặt lớp", error.message); updateSubmitButtonState(); }
+    });
     if (attendanceForm) attendanceForm.addEventListener("submit", handleFormSubmit);
 
     // 👉 THÊM DÒNG NÀY ĐỂ KÍCH HOẠT POPUP HƯỚNG DẪN GPS:
     setupGpsGuideModal();
+  }
+
+  async function loadClassSettings() {
+    const response = await fetch(`${apiUrl}?action=config${classHint ? "&class=" + encodeURIComponent(classHint) : ""}`, { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Không kết nối được hệ thống.");
+    Object.assign(config, data);
+    activeClassId = data.classId;
   }
 
   // 2. Định nghĩa hàm setupGpsGuideModal() (ĐẶT NẰM NGOÀI HÀM init)
@@ -188,7 +213,8 @@
   // Tạo Device ID độc bản (Kết hợp Fingerprint + Random UUID ngầm)
   async function getOrCreateDeviceFingerprint() {
     const storageKey = "DEVICE_PERMANENT_ID_V3";
-    let savedId = localStorage.getItem(storageKey);
+    let savedId = null;
+    try { savedId = localStorage.getItem(storageKey); } catch (_) { /* Storage can be unavailable in private browsers. */ }
     
     // Nếu thiết bị này đã từng lưu mã trước đó -> Lấy lại mã cũ
     if (savedId) {
@@ -373,7 +399,9 @@
     const distRounded = Math.round(distance);
     const accRounded = Math.round(accuracy);
 
-    if (distance <= config.ALLOWED_RADIUS_METERS) {
+    if (accuracy > config.MAX_GPS_ACCURACY_METERS) {
+      if (currentStatus === "Có mặt") updateGpsUI("error", "Sai số GPS quá lớn", `Vui lòng quét lại. Sai số hiện tại ±${accRounded}m, tối đa ${config.MAX_GPS_ACCURACY_METERS}m.`);
+    } else if (distance <= config.ALLOWED_RADIUS_METERS) {
       currentUserLocation.isValid = true;
       if (currentStatus === "Có mặt") {
         updateGpsUI(
@@ -429,6 +457,7 @@
   }
 
   function updateSubmitButtonState() {
+    if (!settingsReady) { btnSubmit.disabled = true; btnSubmitText.textContent = "Bấm Quét lại để kết nối"; return; }
     if (currentStatus === "Vắng có lý do") {
       btnSubmit.disabled = false;
       btnSubmitText.textContent = "Gửi Báo Vắng Có Lý Do";
@@ -482,15 +511,16 @@
       return;
     }
 
-    const webhookUrl = config.GOOGLE_SCRIPT_WEBHOOK_URL;
-    if (!webhookUrl || webhookUrl.includes("YOUR_SCRIPT_ID_HERE")) {
-      alert("⚠️ Quản trị viên chưa cấu hình URL Webhook Google Apps Script trong file config.js!");
+    if (!settingsReady || !activeClassId) {
+      alert("Chưa tải được cài đặt lớp. Vui lòng bấm Quét lại.");
       return;
     }
 
     setSubmittingState(true);
 
-    const payload = {
+    let payload = {
+      classId: activeClassId,
+      requestId: crypto.randomUUID(),
       hoTen: fullName,
       donVi: donVi,
       attendanceDate: formattedDate,
@@ -504,15 +534,27 @@
       userAgent: navigator.userAgent
     };
 
+    // Keep the same request and payload if a connection fails after the server saved it.
+    const pendingKey = `ATTENDANCE_PENDING_${activeClassId}`;
+    const signature = JSON.stringify([payload.hoTen, payload.donVi, payload.status, payload.absentReason, payload.attendanceDate]);
     try {
-      await fetch(webhookUrl, {
+      const pending = JSON.parse(sessionStorage.getItem(pendingKey) || "null");
+      if (pending && pending.signature === signature) payload = pending.payload;
+      sessionStorage.setItem(pendingKey, JSON.stringify({ signature, payload }));
+    } catch (_) { /* Retry still works within this page even when storage is unavailable. */ }
+
+    try {
+      const response = await fetch(`${apiUrl}?action=attendance`, {
         method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      const result = await response.json();
+      if (!response.ok || result.status !== "success") {
+        try { sessionStorage.removeItem(pendingKey); } catch (_) {}
+        throw new Error(result.message || "Chưa lưu được dữ liệu. Vui lòng thử lại.");
+      }
+      try { sessionStorage.removeItem(pendingKey); } catch (_) {}
 
       // Lưu thông tin người dùng vào máy
       saveUserInfo(fullName, donVi);
@@ -526,7 +568,7 @@
         status: currentStatus,
         reason: absentReason,
         deviceId: currentDeviceId,
-        time: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN")
+        time: new Date(result.receivedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
       };
 
       try {
@@ -548,7 +590,7 @@
 
     } catch (err) {
       console.error("Lỗi khi gửi dữ liệu:", err);
-      alert("Có lỗi kết nối đến máy chủ Google Sheets. Vui lòng thử lại!");
+      alert(err.message || "Có lỗi kết nối đến hệ thống. Vui lòng thử lại!");
     } finally {
       setSubmittingState(false);
     }
@@ -558,7 +600,7 @@
     btnSubmit.disabled = isSubmitting;
     if (isSubmitting) {
       btnSpinner.style.display = "inline-block";
-      btnSubmitText.textContent = "Đang lưu vào Google Sheets...";
+      btnSubmitText.textContent = "Đang lưu điểm danh...";
     } else {
       btnSpinner.style.display = "none";
       updateSubmitButtonState();
@@ -592,6 +634,7 @@
       successSubtitle.textContent = "Thiết bị này đã hoàn thành điểm danh cho ngày hôm nay.";
     }
 
+    if (successSubtitle) successSubtitle.textContent = "Dữ liệu đã được ghi nhận vào hệ thống.";
     successScreen.style.display = "block";
   }
 

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#087f5b"><title>Quản trị điểm danh</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+  <main id="loginView" class="login-wrap">
+    <form id="loginForm" class="login-card">
+      <div class="brand-mark">ĐD</div><p class="eyebrow">QUẢN TRỊ LỚP HỌC</p><h1>Đăng nhập quản trị</h1>
+      <p class="muted">Theo dõi điểm danh, danh sách lớp và vị trí phòng học.</p>
+      <label>Email<input type="email" name="email" autocomplete="username" required></label>
+      <label>Mật khẩu<input type="password" name="password" autocomplete="current-password" required></label>
+      <button type="submit" class="primary">Đăng nhập</button>
+      <p id="loginError" class="error" role="alert"></p>
+      <a href="/">Về trang điểm danh</a>
+    </form>
+  </main>
+  <div id="appView" class="admin-shell" hidden>
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">ĐD</span><div><strong>Điểm danh</strong><small>Quản trị lớp học</small></div></div>
+      <nav aria-label="Quản trị">
+        <button class="nav-item active" data-view="dashboard">Tổng quan phiên</button>
+        <button class="nav-item" data-view="students">Danh sách lớp</button>
+        <button class="nav-item" data-view="schedule">Lịch điểm danh</button>
+        <button class="nav-item" data-view="settings">Vị trí & cài đặt</button>
+        <button class="nav-item" data-view="audit">Nhật ký thay đổi</button>
+        <button class="nav-item" data-view="account">Tài khoản</button>
+      </nav>
+      <div class="sidebar-bottom"><small id="userEmail"></small><button id="logoutButton">Đăng xuất</button><a href="/">Trang điểm danh học viên ↗</a></div>
+    </aside>
+    <main class="workspace">
+      <header class="topbar"><div><p class="eyebrow">QUẢN LÝ ĐIỂM DANH</p><h1 id="viewTitle">Tổng quan phiên</h1></div><label class="class-picker">Lớp<select id="classSelect" aria-label="Chọn lớp"></select></label></header>
+      <section id="dashboardView" class="view">
+        <div class="panel toolbar"><label>Ngày<input type="date" id="dashboardDate" required></label><label>Phiên<select id="sessionSelect"></select></label><div class="toolbar-actions"><span id="connectionState" class="connection">Đang kết nối</span><button id="refreshDashboard">Làm mới</button><button id="exportButton">Xuất CSV</button></div></div>
+        <div class="session-banner"><div><strong id="sessionHeading">Chưa có phiên</strong><span id="sessionDetail"></span></div><small id="updatedAt"></small></div>
+        <div id="statCards" class="stat-grid"></div>
+        <section class="panel results-panel">
+          <div class="tabs" id="resultTabs" role="tablist" aria-label="Danh sách điểm danh">
+            <button data-filter="absent" class="active" role="tab">Vắng</button><button data-filter="reason" role="tab">Có lý do</button><button data-filter="pending" role="tab">Chưa điểm danh</button><button data-filter="duplicate" role="tab">Trùng thiết bị</button><button data-filter="unmatched" role="tab">Tên không khớp</button><button data-filter="outside" role="tab">Ngoài phiên</button><button data-filter="all" role="tab">Tất cả</button>
+          </div>
+          <div class="table-heading"><div><h2 id="resultTitle">Danh sách vắng</h2><p id="resultHint" class="muted"></p></div><input id="searchInput" type="search" placeholder="Tìm họ tên hoặc đơn vị" aria-label="Tìm học viên"></div>
+          <div id="resultTable" class="table-scroll"></div>
+        </section>
+      </section>
+      <section id="studentsView" class="view" hidden>
+        <div class="panel"><div class="section-heading"><div><h2>Nhập danh sách gốc</h2><p class="muted">Theo mẫu: TT · Họ và tên · Ngày sinh · Đơn vị. Không yêu cầu mã học viên.</p></div><button id="templateButton">Tải mẫu CSV</button></div>
+          <label>File danh sách<input id="rosterFile" type="file" accept=".xlsx,.csv"></label>
+          <details><summary>Hoặc dán bảng từ Excel</summary><label>Nội dung gồm hàng tiêu đề<textarea id="rosterPaste" rows="5" placeholder="TT&#9;Họ và tên&#9;Ngày sinh&#9;Đơn vị"></textarea></label><button id="previewPaste">Xem trước nội dung</button></details>
+          <div id="importPreview" hidden><h3 id="previewHeading"></h3><ul id="previewMessages"></ul><div id="previewTable" class="table-scroll"></div><div class="import-controls"><label>Cách nhập<select id="importMode"><option value="replace">Thay thế danh sách hiện hành</option><option value="append">Thêm vào danh sách hiện hành</option></select></label><label class="checkbox"><input id="confirmImport" type="checkbox">Tôi đã kiểm tra danh sách và tên trùng</label><button id="commitImport" class="primary">Xác nhận nhập</button></div></div>
+        </div>
+        <div class="panel"><div class="section-heading"><div><h2 id="studentCount">Danh sách học viên</h2><p class="muted">Phiên đã có lượt gửi giữ danh sách riêng để bảo toàn lịch sử. Có thể đồng bộ rõ ràng bằng nút bên cạnh.</p></div><button id="syncRosterButton">Đồng bộ danh sách vào phiên đang chọn</button></div><button id="addStudentButton">Thêm học viên</button><div id="studentTable" class="table-scroll"></div></div>
+      </section>
+      <section id="scheduleView" class="view" hidden>
+        <form id="scheduleForm" class="panel"><h2>Lịch riêng cho từng ngày</h2><p class="muted">Học viên dùng trang điểm danh chung. Toàn bộ khung giờ là đúng giờ; sau khung giờ vẫn nhận và tính muộn.</p>
+          <label>Ngày<input type="date" name="day" id="scheduleDate" required></label>
+          <div class="form-grid"><label>Sáng: mở<input type="time" name="morning_open" value="07:00" required></label><label>Sáng: hết giờ đúng giờ<input type="time" name="morning_deadline" value="08:00" required></label><label>Chiều: mở<input type="time" name="afternoon_open" value="13:30" required></label><label>Chiều: hết giờ đúng giờ<input type="time" name="afternoon_deadline" value="14:00" required></label></div>
+          <p class="muted">Nhận muộn sáng đến trước giờ mở chiều; nhận muộn chiều đến hết ngày.</p><label class="checkbox"><input type="checkbox" name="cancelled">Ngày nghỉ / hủy cả hai phiên</label>
+          <button type="submit" class="primary">Lưu lịch ngày này</button>
+        </form>
+      </section>
+      <section id="settingsView" class="view" hidden>
+        <form id="settingsForm" class="panel"><div class="section-heading"><div><h2>Cài đặt lớp & vị trí</h2><p class="muted">Cài đặt được lưu trong database, không cần triển khai lại.</p></div><button type="button" id="newClassButton">Tạo lớp mới</button></div>
+          <div class="form-grid"><label>Tên lớp<input name="name" required maxlength="250"></label><label>Mã liên kết lớp<input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="lop-hoc"></label></div>
+          <label class="checkbox"><input type="checkbox" name="is_default">Lớp mặc định của trang điểm danh chung</label><label class="checkbox"><input type="checkbox" name="auto_daily">Tự tạo phiên mỗi ngày theo khung mặc định</label>
+          <h3>Tọa độ và khoảng cách</h3><div class="form-grid"><label>Vĩ độ<input type="number" name="latitude" step="any" min="-90" max="90" required></label><label>Kinh độ<input type="number" name="longitude" step="any" min="-180" max="180" required></label><label>Bán kính cho phép (m)<input type="number" name="radius" min="1" max="100000" step="any" required></label><label>Sai số GPS tối đa (m)<input type="number" name="max_accuracy" min="1" max="100000" step="any" required></label></div>
+          <button type="button" id="locateClassButton">Lấy GPS tại vị trí đang đứng</button><p id="locationInfo" class="muted"></p><label class="checkbox"><input type="checkbox" name="apply_current">Áp dụng vị trí/bán kính mới cho các phiên chưa kết thúc</label>
+          <h3>Khung giờ mặc định</h3><div class="form-grid"><label>Sáng: mở<input type="time" name="morning_open" required></label><label>Sáng: hết giờ đúng giờ<input type="time" name="morning_deadline" required></label><label>Chiều: mở<input type="time" name="afternoon_open" required></label><label>Chiều: hết giờ đúng giờ<input type="time" name="afternoon_deadline" required></label></div>
+          <button type="submit" class="primary">Lưu cài đặt</button><p id="attendanceLink" class="muted"></p>
+        </form>
+      </section>
+      <section id="auditView" class="view" hidden><div class="panel"><h2>100 thay đổi gần nhất</h2><div id="auditTable" class="table-scroll"></div></div></section>
+      <section id="accountView" class="view" hidden><form id="passwordForm" class="panel narrow"><h2>Đổi mật khẩu quản trị</h2><label>Mật khẩu mới<input name="password" type="password" minlength="12" autocomplete="new-password" required></label><label>Nhập lại mật khẩu<input name="confirmation" type="password" minlength="12" autocomplete="new-password" required></label><p class="muted">Sau khi đổi mật khẩu, đăng nhập lại. Nếu quên mật khẩu, quản trị project có thể đặt lại trong Supabase Authentication.</p><button class="primary" type="submit">Đổi mật khẩu</button></form></section>
+    </main>
+  </div>
+  <dialog id="actionDialog"><form id="actionForm"><div class="section-heading"><h2 id="dialogTitle"></h2><button type="button" id="closeDialog" aria-label="Đóng">×</button></div><div id="dialogBody"></div><div class="dialog-actions"><button type="button" id="cancelDialog">Hủy</button><button type="submit" class="primary" id="confirmDialog">Lưu</button></div></form></dialog>
+  <script type="module" src="/admin/admin.js"></script>
+</body>
+</html>

@@ -1,105 +1,66 @@
-# 📍 HỆ THỐNG ĐIỂM DANH GPS KẾT NỐI GOOGLE SHEETS & DEPLOY VERCEL
+# Điểm danh GPS · PostgreSQL & trang admin
 
-Hệ thống cho phép học viên quét mã QR tại lớp để mở trang Web điểm danh, trình duyệt tự động kiểm tra tọa độ GPS xem học viên có thực sự đang ngồi trong phòng học (bán kính <= 30-40m) hay không. Nếu hợp lệ, thông tin sẽ được gửi tức thì về Google Sheets của giảng viên.
+Bản nâng cấp từ repo `ludarao/diemdanh` (mốc `44b1ade`). Giao diện học viên dùng nguyên `index.html` và `style.css` gốc; chỉ phần JavaScript gửi/lưu dữ liệu được thay bằng API cùng tên miền. Dashboard quản trị ở `/admin`.
 
----
+## Chức năng
 
-## 🚀 QUY TRÌNH TRIỂN KHAI (4 BƯỚC ĐƠN GIẢN)
+- PostgreSQL trên Supabase; Vercel phục vụ trang web và API Node.js.
+- Admin đăng nhập bằng email/mật khẩu Supabase Auth, cookie HttpOnly, có đăng xuất/đổi mật khẩu.
+- Nhập `.xlsx` hoặc CSV theo mẫu `TT | Họ và tên | Ngày sinh | Đơn vị`; xem trước lỗi và tên trùng; thêm/sửa/ngừng sử dụng học viên. Có mẫu CSV để tải và vùng dán bảng Excel.
+- Dò tên có dấu, không phân biệt hoa/thường và khoảng trắng thừa. Không tự bỏ dấu, sửa chính tả hoặc ghép tên gần giống. Tên không khớp và tên trùng được lưu để đối chiếu thủ công.
+- Sáng đúng giờ 07:00–08:00, muộn sau 08:00 đến trước 13:30. Chiều đúng giờ 13:30–14:00, muộn sau 14:00 đến hết ngày. Dùng giờ server tại Việt Nam.
+- Lịch mặc định theo lớp, tự tạo hai phiên trong ngày khi có truy cập; chỉnh riêng từng ngày/ngày nghỉ trên admin. Phiên chỉ xuất hiện ở admin.
+- Dashboard theo lớp/ngày/phiên: vắng, có lý do, chưa điểm danh, trùng thiết bị, tên không khớp, ngoài phiên. Có duyệt lý do, ghi nhận thủ công, đối chiếu tên, xuất CSV và nhật ký.
+- Chỉnh tọa độ, lấy GPS hiện tại, bán kính cho phép, ngưỡng sai số GPS trong admin. Server tính lại khoảng cách; giữ cấu hình đã áp dụng ở từng lượt gửi.
+- Supabase Realtime khi được cấu hình; tự làm mới 2,5 giây làm cơ chế dự phòng và để cập nhật khi hết giờ dù không có lượt gửi mới.
 
-### BƯỚC 1: Cài đặt Google Apps Script trên Google Sheets
+## Chạy và triển khai
 
-1. Tạo một bảng tính mới trên [Google Sheets](https://sheets.google.com).
-2. Trên thanh menu, chọn: **Tiện ích mở rộng** (*Extensions*) ➔ **Apps Script**.
-3. Xóa hết mã hiện có trong file `Code.gs`, mở file `google_apps_script.js` trong thư mục này và sao chép toàn bộ nội dung dán vào.
-4. Bấm nút **Triển khai** (*Deploy*) ở góc trên bên phải ➔ chọn **Tùy chọn triển khai mới** (*New deployment*).
-5. Bấm vào biểu tượng bánh răng ⚙️ bên cạnh "Chọn loại", chọn **Ứng dụng web** (*Web app*):
-   - **Mô tả**: `Webhook Điểm danh GPS`
-   - **Thực thi dưới dạng** (*Execute as*): `Tôi (tài khoản email của bạn / Me)`
-   - **Ai có quyền truy cập** (*Who has access*): **`Bất kỳ ai (Anyone)`** *(Lưu ý: Bắt buộc chọn dòng này để học viên gửi được điểm danh không cần đăng nhập).*
-6. Bấm **Triển khai** (*Deploy*) và tiến hành cấp quyền truy cập tài khoản Google khi xuất hiện bảng thông báo.
-7. Sau khi triển khai xong, Google sẽ cung cấp cho bạn một **URL Ứng dụng web** (có dạng `https://script.google.com/macros/s/AKfycb.../exec`). **Sao chép URL này**.
+Đọc [hướng dẫn cấu hình Supabase và Vercel](docs/HUONG_DAN_TRIEN_KHAI.md). Cần Node.js 22 hoặc mới hơn.
 
----
-
-### BƯỚC 2: Cấu hình tọa độ phòng học & Link Webhook vào `config.js`
-
-Mở file `config.js` trong thư mục này và cập nhật 3 thông số:
-
-```javascript
-const CONFIG = {
-  // 1. Tọa độ phòng học (Vĩ độ & Kinh độ)
-  CLASSROOM_LAT: 21.028511, // Thay bằng vĩ độ phòng học thực tế
-  CLASSROOM_LNG: 105.854444, // Thay bằng kinh độ phòng học thực tế
-
-  // 2. Bán kính cho phép (mét) - thường đặt 30m - 50m
-  ALLOWED_RADIUS_METERS: 40,
-
-  // 3. Dán URL Webhook bạn vừa sao chép ở Bước 1 vào đây:
-  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycb.../exec"
-};
-```
-
-> 💡 **Mẹo lấy tọa độ phòng học cực nhanh:**
-> - Bạn chỉ cần đứng tại phòng học, mở trang web trên điện thoại của bạn, bấm vào dòng **"⚙️ Cài đặt tọa độ phòng học"** ở dưới chân trang rồi bấm nút **"📍 Lấy tọa độ vị trí bạn đang đứng"**. Trang web sẽ hiển thị ngay số vĩ độ/kinh độ chính xác để bạn copy vào `config.js`!
-
----
-
-### BƯỚC 3: Deploy lên Vercel (Miễn phí 100%)
-
-Bạn có thể chọn 1 trong 2 cách sau:
-
-#### Cách 1: Deploy trực tiếp qua giao diện Web Vercel (Khuyên dùng - Đơn giản nhất)
-1. Đẩy thư mục này lên một kho lưu trữ GitHub cá nhân của bạn (private hoặc public đều được).
-2. Truy cập [vercel.com](https://vercel.com) và đăng nhập bằng tài khoản GitHub.
-3. Bấm nút **"Add New..."** ➔ **"Project"**.
-4. Chọn repository bạn vừa tạo và bấm **"Import"**.
-5. Giữ nguyên toàn bộ cấu hình mặc định và bấm nút **"Deploy"**.
-6. Sau khoảng 10 giây, Vercel sẽ cấp cho bạn một đường link chính thức (Ví dụ: `https://diem-danh-gps.vercel.app`).
-
-#### Cách 2: Deploy bằng dòng lệnh Terminal (Vercel CLI)
-Chạy lệnh sau ngay tại thư mục dự án:
 ```bash
-npx vercel
+npm ci
+cp .env.example .env.local
+# Điền các biến vào .env.local, không commit file này.
+npm run migrate
+npm run dev
 ```
-- Làm theo hướng dẫn trên màn hình:
-  - `Set up and deploy?` ➔ Nhập `y` (Enter)
-  - `Which scope do you want to deploy to?` ➔ Chọn tài khoản của bạn (Enter)
-  - `Link to existing project?` ➔ Nhập `n` (Enter)
-  - `What's your project's name?` ➔ Đặt tên (hoặc Enter lấy mặc định)
-  - `In which directory is your code located?` ➔ Nhập `./` (Enter)
-- Khi muốn deploy bản chính thức (Production):
+
+Trang học viên: `http://localhost:3000/`. Trang quản trị: `http://localhost:3000/admin`.
+
 ```bash
-npx vercel --prod
+npm test
+npm run build
 ```
 
----
+`npm run dev` tạo lại `dist/` khi khởi động. Sau khi sửa mã nguồn, khởi động lại để xem bản mới.
 
-### BƯỚC 4: Tạo mã QR cho lớp học quét
+## Dữ liệu và quy tắc
 
-1. Lấy đường link Vercel đã deploy ở Bước 3.
-2. Bạn có thể gắn thêm tên buổi học hoặc tên lớp vào link để phân loại dữ liệu trong Google Sheets, ví dụ:
-   - `https://diem-danh-gps.vercel.app/?session=Buoi-1&class=LLCT-K12`
-   - `https://diem-danh-gps.vercel.app/?session=Buoi-2`
-3. Truy cập các trang tạo QR miễn phí như [me-qr.com](https://me-qr.com) hoặc [qr-code-generator.com](https://www.qr-code-generator.com/) để tạo mã QR từ đường link trên.
-4. Trình chiếu mã QR lên máy chiếu trên bục giảng để học viên quét bằng camera điện thoại.
+- File danh sách thật không được nhúng vào mã nguồn hoặc bản web công khai. Nhập từ admin sau khi đăng nhập. File nguồn của người dùng chỉ được dùng để kiểm tra bộ đọc Excel tại máy làm việc.
+- Ngày sinh chỉ nằm trong danh sách quản trị; không trả về API công khai. Học viên không cần mã hay tài khoản.
+- Trước hạn đúng giờ: chưa điểm danh. Sau hạn: vắng, và chuyển sang đi muộn nếu nhận được lượt có mặt tiếp theo trong khoảng nhận muộn.
+- Báo vắng/đi muộn bằng form cũ tạo yêu cầu có lý do, chưa được coi là có mặt. Admin duyệt phép; nếu sau đó có lượt có mặt thì thời điểm có mặt quyết định đúng giờ/muộn.
+- Tên không khớp không làm tăng sĩ số hoặc số có mặt của danh sách gốc. Tên trùng nhiều học viên không tự liên kết; đơn vị/ngày sinh hỗ trợ quản trị đối chiếu.
+- Một học viên có thể gửi nhiều lượt; lịch sử được giữ, bảng tổng hợp lấy lần có mặt đầu tiên trong phiên. Retry cùng request ID trả lại cùng biên nhận.
+- Cảnh báo trùng thiết bị là cờ đối chiếu, không tự kết luận gian lận. Device ID là dấu hiệu của trình duyệt, không phải định danh phần cứng chắc chắn.
+- Ngày do học viên chọn được giữ như thông tin khai báo. Giờ server quyết định phiên, đúng giờ và muộn.
+- Lượt ngoài lịch vẫn được lưu sau kiểm tra đầu vào/GPS tương ứng, admin có thể gán lại phiên. Lượt có mặt ngoài bán kính hoặc GPS vượt ngưỡng sẽ bị từ chối như luồng điểm danh gốc.
+- Thay danh sách lớp không âm thầm xóa lịch sử phiên đã điểm danh. Admin chọn “Đồng bộ danh sách vào phiên đang chọn” để áp dụng rõ ràng; thao tác có nhật ký.
+- Tài khoản trong `admin_users` là quản trị toàn bộ ứng dụng. Phiên bản này chưa có vai trò giảng viên giới hạn theo từng lớp.
 
----
+## Cấu trúc
 
-## 📊 DỮ LIỆU ĐƯỢC GHI VÀO GOOGLE SHEETS
-Mỗi khi có học viên bấm điểm danh hợp lệ, Google Sheets sẽ tự động thêm 1 dòng:
-- **Thời gian**: Ngày giờ chính xác theo múi giờ Việt Nam (`dd/MM/yyyy HH:mm:ss`)
-- **Mã sinh viên**: MSSV của người điểm danh
-- **Họ và tên**: Tên học viên
-- **Lớp / Buổi học**: Tên buổi được truyền qua URL hoặc học viên nhập
-- **Khoảng cách (m)**: Khoảng cách từ vị trí học viên tới tâm phòng học (ví dụ: `12.4`)
-- **Vĩ độ & Kinh độ**: Tọa độ GPS thực tế của máy học viên lúc bấm nút
-- **Sai số GPS (m)**: Độ chính xác của thiết bị (thường từ 5m - 20m)
-- **Thiết bị / Trình duyệt**: Thông tin dòng máy học viên sử dụng (User-Agent)
+- `app.js`, `config.js`: kết nối API, nhận cấu hình lớp và biên nhận server.
+- `admin/`: trang quản trị riêng.
+- `api/index.js`: API chung; mọi thao tác quản trị cần xác thực.
+- `lib/`: luật nghiệp vụ, truy cập database, đăng nhập, đọc Excel.
+- `migrations/`: tạo bảng, index, RLS và đăng ký Realtime.
+- `tests/`: kiểm thử luật nghiệp vụ/API/PostgreSQL bằng PGlite, gồm giữ nguyên HTML/CSS.
+- `google_apps_script.js`: mã cũ chỉ để đối chiếu; không còn được gọi và không đưa vào `dist/`.
 
----
+## Phạm vi kiểm chứng
 
-## 🛡️ CÁC TÍNH NĂNG BẢO MẬT & CHỐNG GIAN LẬN
-1. **Chống điểm danh hộ từ xa**: Trình duyệt dùng GPS phần cứng của điện thoại kết hợp công thức khoảng cách Haversine. Nếu học viên ở nhà hoặc ngoài khuôn viên, nút điểm danh sẽ bị khóa hoàn toàn.
-2. **Kiểm tra độ chính xác GPS**: Hệ thống cảnh báo và từ chối nếu thiết bị cố tình fake GPS kém hoặc tín hiệu sai số quá lớn (> 80m).
-3. **Chống spam**: Google Apps Script tích hợp `LockService` chống nghẽn hàng đợi khi toàn bộ lớp 100+ học viên bấm điểm danh cùng một giây.
-4. **Tiện lợi cho học viên**: Tự động lưu MSSV & Họ tên vào điện thoại sau lần đầu tiên, các buổi học sau học viên chỉ cần quét mã và bấm 1 chạm là xong.
+Đã kiểm thử cục bộ nghiệp vụ trên PostgreSQL nhúng PGlite, đọc file mẫu 80 học viên, kiểm tra API từ chối truy cập ẩn danh và thao tác admin qua trình duyệt với dữ liệu giả. Các bài kiểm thử đồng thời cục bộ kiểm tra tính idempotent nhưng không thay thế đo tải nhiều kết nối PostgreSQL thật.
+
+Cần kiểm tra Supabase Auth, TLS/pooler, Realtime và Vercel trên project thật sau khi cấu hình; chưa có tài khoản/project nên chưa triển khai cloud. Bản kiểm thử giao diện dùng dữ liệu giả tại máy, không phải database production.

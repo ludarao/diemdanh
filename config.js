@@ -21,11 +21,12 @@ const CONFIG = {
   // Ngưỡng sai số GPS tối đa được chấp nhận (mét). Nếu GPS thiết bị quá mờ (sai số > 80m) sẽz báo bật GPS độ chính xác cao
   MAX_GPS_ACCURACY_METERS: 150,
 
-  // URL Webhook của Google Apps Script (Nhận được sau khi bấm 'Deploy as Web App' trên Google Sheets)
-  GOOGLE_SCRIPT_WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbw5ur1fFPPJWelurtkR_M-KvVTS5euS-sSf1Vmtf0641wo2U66XHVVjcGlHJk2h-aE-/exec",
+  // Same-origin API. Classroom position/radius are loaded from the database.
+  API_URL: "/api",
 
   // Khóa lưu trữ LocalStorage để tự nhớ MSSV & Họ tên học viên
-  STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V1"
+  STORAGE_KEY: "STUDENT_ATTENDANCE_INFO_V1",
+  LOCK_STORAGE_KEY: "ATTENDANCE_DEVICE_LOCK_V2"
 };
 
 if (typeof window !== "undefined") {
