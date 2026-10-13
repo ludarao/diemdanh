@@ -86,12 +86,12 @@
         <p class="muted">Các nút sẽ mở bản xem trước số lượng dữ liệu trước khi xác nhận. Dữ liệu đã xóa không khôi phục trực tiếp trong ứng dụng.</p>
       </section>
       <section id="viewersView" class="view" hidden>
-        <div class="panel"><h2>Tài khoản lớp trưởng</h2><p class="muted">Chỉ xem Tổng quan của lớp được giao. Không được sửa, duyệt, xuất CSV hoặc xóa dữ liệu.</p><button id="createViewerButton" class="primary">Cấp tài khoản lớp trưởng</button><div id="viewerAccounts" class="table-scroll"></div></div>
+        <div class="panel"><h2>Tài khoản lớp trưởng</h2><p class="muted">Chỉ xem Tổng quan của lớp được giao. Không được sửa, duyệt, xuất CSV hoặc xóa dữ liệu.</p><button id="createViewerButton" class="primary">Cấp tài khoản lớp trưởng</button><button id="checkViewerAuthButton">Kiểm tra kết nối Supabase</button><div id="viewerAccounts" class="table-scroll"></div></div>
       </section>
       <section id="accountView" class="view" hidden><form id="passwordForm" class="panel narrow"><h2>Đổi mật khẩu quản trị</h2><label>Mật khẩu mới<input name="password" type="password" minlength="12" autocomplete="new-password" required></label><label>Nhập lại mật khẩu<input name="confirmation" type="password" minlength="12" autocomplete="new-password" required></label><p class="muted">Sau khi đổi mật khẩu, đăng nhập lại. Nếu quên mật khẩu, quản trị project có thể đặt lại trong Supabase Authentication.</p><button class="primary" type="submit">Đổi mật khẩu</button></form></section>
     </main>
   </div>
-  <dialog id="actionDialog"><form id="actionForm"><div class="section-heading"><h2 id="dialogTitle"></h2><button type="button" id="closeDialog" aria-label="Đóng">×</button></div><div id="dialogBody"></div><div class="dialog-actions"><button type="button" id="cancelDialog">Hủy</button><button type="submit" class="primary" id="confirmDialog">Lưu</button></div></form></dialog>
+  <dialog id="actionDialog"><form id="actionForm"><div class="section-heading"><h2 id="dialogTitle"></h2><button type="button" id="closeDialog" aria-label="Đóng">×</button></div><p id="dialogError" class="error" role="alert" hidden></p><div id="dialogBody"></div><div class="dialog-actions"><button type="button" id="cancelDialog">Hủy</button><button type="submit" class="primary" id="confirmDialog">Lưu</button></div></form></dialog>
   <script type="module" src="/admin/admin.js"></script>
 </body>
 </html>

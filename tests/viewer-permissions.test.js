@@ -34,7 +34,7 @@ test('Lớp trưởng chỉ thấy lớp được giao, không đọc được d
 });
 test('Lớp trưởng không gọi được API sửa/xóa/duyệt, export, nhật ký hoặc tự cấp quyền',async()=>{
   const f=await fixture();try{
-    for(const action of ['students','audit','export','template','viewers','deletion-preview'])assert.equal((await f.request(action,{class_id:f.c.id})).statusCode,403,action);
+    for(const action of ['students','audit','export','template','viewers','deletion-preview','viewer-auth-status'])assert.equal((await f.request(action,{class_id:f.c.id})).statusCode,403,action);
     for(const action of ['save-class','save-schedule','preview-import','import','reconcile','review-reason','resolve-device','save-student','sync-roster','manual-attendance','delete-data','change-password','save-viewer']){
       assert.equal((await f.request(action,{}, {class_id:f.c.id,user_id:f.viewer.user_id,role:'admin',enabled:true})).statusCode,403,action);
     }

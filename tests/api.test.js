@@ -9,7 +9,7 @@ async function request(url,{method='GET',body,origin='http://localhost:3000'}={}
   await createHandler({db})(req,res);return {...res,json:JSON.parse(res.body)};
 }
 test('Ẩn danh không đọc danh sách, dashboard hoặc nhật ký và không sửa admin',async()=>{
-  for(const action of ['classes','students','dashboard','audit','realtime-config','deletion-preview','viewers']){const r=await request(`/api?action=${action}`);assert.equal(r.statusCode,401);}
+  for(const action of ['classes','students','dashboard','audit','realtime-config','deletion-preview','viewers','viewer-auth-status']){const r=await request(`/api?action=${action}`);assert.equal(r.statusCode,401);}
   for(const action of ['save-class','save-schedule','import','reconcile','review-reason','save-student','sync-roster','delete-data','save-viewer']){const r=await request(`/api?action=${action}`,{method:'POST',body:{}});assert.equal(r.statusCode,401);}
 });
 test('API quản trị từ nguồn khác bị từ chối và GET không được ghi dữ liệu',async()=>{

@@ -7,7 +7,7 @@ const auth=require('../lib/auth');
 const {previewImport,csv}=require('../lib/import');
 const {previewDeletion,deleteData}=require('../lib/delete-data');
 const {authorize,visibleClasses,roleOf}=require('../lib/permissions');
-const {listViewers,saveViewer}=require('../lib/viewer-accounts');
+const {listViewers,saveViewer,checkViewerAuth}=require('../lib/viewer-accounts');
 const mutationActions=new Set(['login','refresh','logout','attendance','preview-import','import','save-class','save-schedule','reconcile','review-reason','resolve-device','change-password','save-student','sync-roster','manual-attendance','delete-data','save-viewer']);
 function createHandler(dependencies={}){
   return async function handler(req,res){
@@ -38,6 +38,7 @@ function createHandler(dependencies={}){
       switch(action){
         case 'me':return json(res,{email:actor.email,role:roleOf(actor)});
         case 'classes':return json(res,await visibleClasses(db,actor));
+        case 'viewer-auth-status':return json(res,await checkViewerAuth(db,actor,dependencies.adminAuth));
         case 'viewers':return json(res,await listViewers(db,actor));
         case 'save-viewer':return json(res,await saveViewer(db,input,actor,dependencies.adminAuth));
         case 'students':return json(res,await store.listStudents(db,store.uuid(url.searchParams.get('class_id'))));

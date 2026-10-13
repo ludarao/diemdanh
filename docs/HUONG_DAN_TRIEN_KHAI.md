@@ -142,7 +142,8 @@ Admin mở **Tài khoản lớp trưởng → Cấp tài khoản lớp trưởng
 1. Mở Supabase project → Settings → API Keys. Lấy khóa server `service_role` trong phần Legacy API Keys (hoặc secret key server tương ứng). Không dùng anon/publishable key cho chức năng này. [Tài liệu tạo tài khoản của Supabase](https://supabase.com/docs/reference/javascript/auth-admin-createuser).
 2. Mở Vercel project → Settings → Environment Variables, thêm tên `SUPABASE_SERVICE_ROLE_KEY` với giá trị khóa đó, chọn **Production** (và Preview nếu bạn dùng môi trường này).
 3. Redeploy deployment mới nhất để server nhận biến. Không đưa khóa vào frontend, Git hoặc chat.
-4. Chạy đủ migrations 003 và 004 trước khi cấp tài khoản (`npm run migrate` tự bỏ qua phiên bản đã áp dụng). Nếu dùng SQL Editor thì chạy hai file theo thứ tự. Thiếu migration sẽ bị chặn cấp tài khoản; thiếu khóa sẽ có thông báo cấu hình server.
+4. Trong **Tài khoản lớp trưởng**, bấm **Kiểm tra kết nối Supabase** để kiểm tra quyền khóa server bằng yêu cầu chỉ đọc. Nút này không tạo tài khoản, không thay đổi dữ liệu và chỉ admin dùng được.
+5. Chạy đủ migrations 003 và 004 trước khi cấp tài khoản (`npm run migrate` tự bỏ qua phiên bản đã áp dụng). Nếu dùng SQL Editor thì chạy hai file theo thứ tự. Thiếu migration sẽ bị chặn cấp tài khoản; thiếu khóa sẽ có thông báo cấu hình server.
 
 Trong danh sách tài khoản, admin có **Giao / đổi lớp**, **Khóa / mở khóa**, **Cấp lại mật khẩu**. Chọn “Không giao lớp” để thu hồi quyền xem mà giữ tài khoản. Việc khóa/gỡ/chuyển lớp được kiểm tra lại ở mỗi API; nếu đang xem lớp vừa bị thu hồi, yêu cầu tiếp theo bị chặn và cần đăng nhập lại. Nội dung đã tải trước đó không thể thu hồi khỏi máy người dùng. Cấp lại mật khẩu không hứa hẹn hủy ngay access token cũ; nếu cần chặn ngay, khóa tài khoản trước.
 
@@ -161,6 +162,18 @@ Trong admin, mở **Dữ liệu & xóa lớp**. Chọn đúng lớp ở đầu t
 Mỗi lần xóa có bảng số lượng xem trước, yêu cầu đánh dấu đồng ý và nhập chính xác câu xác nhận. Nếu có dữ liệu mới từ lúc xem trước, hệ thống yêu cầu xem lại và xác nhận lại. Xóa diễn ra trong một transaction; lỗi giữa chừng sẽ hoàn tác. Một nhật ký mới ghi nhận thao tác xóa được giữ để kiểm tra. Ứng dụng không có nút hoàn tác; xuất/sao lưu dữ liệu cần giữ trước khi xác nhận.
 
 Nếu xóa lớp cuối cùng/toàn bộ lớp, admin chuyển sang màn hình tạo lớp mới. Tạo lớp rồi nhập lại danh sách; lớp đầu tiên tự là lớp mặc định. Không cần migration hoặc biến môi trường mới cho chức năng này.
+
+## Lỗi khi cấp tài khoản lớp trưởng
+
+Lỗi được hiển thị ngay trong hộp thoại, kèm mã lỗi Supabase và HTTP (nếu có). Không xuất thông báo thô chứa dữ liệu nhạy cảm. Server chỉ ghi loại thao tác, mã lỗi và HTTP; không ghi email, mật khẩu hoặc khóa.
+
+- `not_admin`, `bad_jwt`, HTTP 401/403 không có mã: kiểm tra khóa server có quyền Auth, thuộc đúng project của SUPABASE_URL, áp dụng Production và đã redeploy. Ứng dụng phát hiện sớm khóa anon/publishable hoặc JWT sai vai trò/project.
+- `weak_password`: mật khẩu chưa đạt chính sách Supabase, dù đủ 12 ký tự của ứng dụng; thêm các nhóm ký tự theo chính sách hoặc dùng mật khẩu khác nếu bị cảnh báo rò rỉ.
+- `user_already_exists`, `email_exists`: email đã tồn tại trong Authentication → Users; không xóa tài khoản thật chỉ để thử lại.
+- `email_provider_disabled`, `signup_disabled`: kiểm tra cấu hình tạo tài khoản Email.
+- `unexpected_failure`, HTTP 5xx: kiểm tra Supabase Auth Logs và trigger trên auth.users; không suy đoán là email trùng.
+
+Bấm **Kiểm tra kết nối Supabase** trước khi thử tạo lại. Kết nối thành công xác nhận quyền của khóa server, không kiểm tra chính sách mật khẩu của một lượt tạo cụ thể. [Danh mục lỗi Supabase](https://supabase.com/docs/guides/auth/debugging/error-codes).
 
 ## Xử lý lỗi thường gặp
 

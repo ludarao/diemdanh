@@ -31,7 +31,7 @@ async function api(action,body=null,params={},retry=true){
   return data;
 }
 function notice(message,error=false){$('#notice').textContent=message;$('#notice').className=`notice${error?' error':''}`;$('#notice').hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>{$('#notice').hidden=true;},6000);}
-async function run(button,fn){if(button)button.disabled=true;try{return await fn();}catch(e){notice(e.message,true);}finally{if(button)button.disabled=false;syncDeleteConfirmation();}}
+async function run(button,fn){if(button)button.disabled=true;try{return await fn();}catch(e){if($('#actionDialog').open){$('#dialogError').textContent=e.message;$('#dialogError').hidden=false;}else notice(e.message,true);}finally{if(button)button.disabled=false;syncDeleteConfirmation();}}
 function showLogin(){
   $('#loginView').hidden=false;$('#appView').hidden=true;updater.pause();updater.setRealtimeConnected(false);clearInterval(state.authTimer);
   realtimeGeneration++;
@@ -222,7 +222,7 @@ function viewerDialog(operation,id=null){
     closeDialog();await loadViewers();notice('Đã cập nhật tài khoản lớp trưởng.');return {handled:true};
   });
 }
-function openDialog(title,body,action,button='Lưu'){$('#dialogTitle').textContent=title;$('#dialogBody').innerHTML=body;state.dialogAction=action;state.deletionPreview=null;$('#confirmDialog').textContent=button;$('#confirmDialog').hidden=!action;$('#confirmDialog').disabled=false;$('#confirmDialog').className='primary';if(!$('#actionDialog').open)$('#actionDialog').showModal();}
+function openDialog(title,body,action,button='Lưu'){$('#dialogError').hidden=true;$('#dialogError').textContent='';$('#dialogTitle').textContent=title;$('#dialogBody').innerHTML=body;state.dialogAction=action;state.deletionPreview=null;$('#confirmDialog').textContent=button;$('#confirmDialog').hidden=!action;$('#confirmDialog').disabled=false;$('#confirmDialog').className='primary';if(!$('#actionDialog').open)$('#actionDialog').showModal();}
 function closeDialog(){$('#actionDialog').close();state.dialogAction=null;state.deletionPreview=null;}
 function prepareNewClass(){
   state.newClass=true;$('#settingsForm').reset();const f=$('#settingsForm').elements;
@@ -289,6 +289,7 @@ async function actionClick(event){
 function editStudent(s=null){
   openDialog(s?'Sửa học viên':'Thêm học viên',`<label>TT<input type="number" name="ordinal" min="1" value="${h(s?.ordinal||'')}"></label><label>Họ và tên<input name="name" required value="${h(s?.name||'')}"></label><label>Ngày sinh<input type="date" name="birth_date" value="${h(s?.birth_date?String(s.birth_date).slice(0,10):'')}"></label><label>Đơn vị<input name="unit" value="${h(s?.unit||'')}"></label>${s?'<label class="checkbox"><input name="inactive" type="checkbox">Ngừng sử dụng trong danh sách hiện hành</label>':''}<p class="muted">Sửa danh sách gốc không tự sửa danh sách của phiên đã có lượt gửi. Dùng Đồng bộ nếu muốn áp dụng cho phiên.</p>`,async values=>{await api('save-student',{class_id:state.classId,id:s?.id,...values,active:!values.inactive});await loadStudents();});
 }
+$('#checkViewerAuthButton').addEventListener('click',()=>run($('#checkViewerAuthButton'),async()=>{const result=await api('viewer-auth-status');notice(result.message);}));
 $('#createViewerButton').addEventListener('click',()=>viewerDialog('create'));
 $('#viewerAccounts').addEventListener('click',event=>{const b=event.target.closest('[data-viewer]');if(b)viewerDialog(b.dataset.viewer,b.dataset.id);});
 $('#refreshPermissions').addEventListener('click',()=>run($('#refreshPermissions'),()=>boot()));
