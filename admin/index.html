@@ -9,8 +9,8 @@
   <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
   <main id="loginView" class="login-wrap">
     <form id="loginForm" class="login-card">
-      <div class="brand-mark">ĐD</div><p class="eyebrow">QUẢN TRỊ LỚP HỌC</p><h1>Đăng nhập quản trị</h1>
-      <p class="muted">Theo dõi điểm danh, danh sách lớp và vị trí phòng học.</p>
+      <div class="brand-mark">ĐD</div><p class="eyebrow">QUẢN LÝ ĐIỂM DANH</p><h1>Đăng nhập quản trị</h1>
+      <p class="muted">Theo dõi điểm danh, danh sách nhóm và vị trí vị trí điểm danh.</p>
       <label>Email<input type="email" name="email" autocomplete="username" required></label>
       <label>Mật khẩu<input type="password" name="password" autocomplete="current-password" required></label>
       <button type="submit" class="primary">Đăng nhập</button>
@@ -20,23 +20,23 @@
   </main>
   <div id="appView" class="admin-shell" hidden>
     <aside class="sidebar">
-      <div class="brand"><span class="brand-mark">ĐD</span><div><strong>Điểm danh</strong><small>Quản trị lớp học</small></div></div>
+      <div class="brand"><span class="brand-mark">ĐD</span><div><strong>Điểm danh</strong><small>Quản lý điểm danh</small></div></div>
       <nav aria-label="Quản trị">
         <button class="nav-item active" data-view="dashboard">Tổng quan phiên</button>
-        <button class="nav-item" data-view="students">Danh sách lớp</button>
-        <button class="nav-item" data-view="schedule">Lịch điểm danh</button>
-        <button class="nav-item" data-view="settings">Vị trí & cài đặt</button>
-        <button class="nav-item" data-view="data">Dữ liệu & xóa lớp</button>
+        <button class="nav-item" data-view="students">Danh sách người tham gia</button>
+        <button class="nav-item" data-view="schedule">Lịch & phiên điểm danh</button>
+        <button class="nav-item" data-view="settings">Vị trí & cấu hình</button>
+        <button class="nav-item" data-view="data">Quản lý dữ liệu</button>
         <button class="nav-item" data-view="audit">Nhật ký thay đổi</button>
-        <button class="nav-item" data-view="viewers">Tài khoản lớp trưởng</button>
+        <button class="nav-item" data-view="viewers">Tài khoản quản lý nhóm</button>
         <button class="nav-item" data-view="account">Tài khoản</button>
       </nav>
-      <div class="sidebar-bottom"><small id="userEmail"></small><button id="logoutButton">Đăng xuất</button><a href="/">Trang điểm danh học viên ↗</a></div>
+      <div class="sidebar-bottom"><small id="userEmail"></small><button id="logoutButton">Đăng xuất</button><a href="/">Trang điểm danh ↗</a></div>
     </aside>
     <main class="workspace">
-      <header class="topbar"><div><p class="eyebrow">QUẢN LÝ ĐIỂM DANH</p><h1 id="viewTitle">Tổng quan phiên</h1></div><label class="class-picker">Lớp<select id="classSelect" aria-label="Chọn lớp"></select></label></header>
+      <header class="topbar"><div><p class="eyebrow">QUẢN LÝ ĐIỂM DANH</p><h1 id="viewTitle">Tổng quan phiên</h1></div><label class="class-picker">Nhóm điểm danh<select id="classSelect" aria-label="Chọn nhóm"></select></label></header>
       <section id="dashboardView" class="view">
-        <div id="noAssignedClass" class="panel" hidden><h2>Chưa được giao lớp</h2><p>Liên hệ admin để được cấp quyền xem một lớp học.</p><button id="refreshPermissions">Kiểm tra quyền xem</button></div>
+        <div id="noAssignedClass" class="panel" hidden><h2>Chưa được giao nhóm</h2><p>Liên hệ admin để được cấp quyền xem một nhóm điểm danh.</p><button id="refreshPermissions">Kiểm tra quyền xem</button></div>
         <div id="dashboardContent">
         <div class="panel toolbar"><label>Ngày<input type="date" id="dashboardDate" required></label><label>Phiên<select id="sessionSelect"></select></label><div class="toolbar-actions"><span id="connectionState" class="connection">Đang kết nối</span><button id="refreshDashboard">Làm mới</button><button id="exportButton">Xuất CSV</button></div></div>
         <div class="session-banner"><div><strong id="sessionHeading">Chưa có phiên</strong><span id="sessionDetail"></span></div><small id="updatedAt"></small></div>
@@ -45,31 +45,34 @@
           <div class="tabs" id="resultTabs" role="tablist" aria-label="Danh sách điểm danh">
             <button data-filter="absent" class="active" role="tab">Vắng</button><button data-filter="reason" role="tab">Có lý do</button><button data-filter="pending" role="tab">Chưa điểm danh</button><button data-filter="duplicate" role="tab">Trùng thiết bị</button><button data-filter="unmatched" role="tab">Tên không khớp</button><button data-filter="outside" role="tab">Ngoài phiên</button><button data-filter="all" role="tab">Tất cả</button>
           </div>
-          <div class="table-heading"><div><h2 id="resultTitle">Danh sách vắng</h2><p id="resultHint" class="muted"></p></div><input id="searchInput" type="search" placeholder="Tìm họ tên hoặc đơn vị" aria-label="Tìm học viên"></div>
+          <div class="table-heading"><div><h2 id="resultTitle">Danh sách vắng</h2><p id="resultHint" class="muted"></p></div><input id="searchInput" type="search" placeholder="Tìm họ tên hoặc đơn vị" aria-label="Tìm người tham gia"></div>
           <div id="resultTable" class="table-scroll"></div>
         </section>
         </div>
       </section>
       <section id="studentsView" class="view" hidden>
-        <div class="panel"><div class="section-heading"><div><h2>Nhập danh sách gốc</h2><p class="muted">Theo mẫu: TT · Họ và tên · Ngày sinh · Đơn vị. Không yêu cầu mã học viên.</p></div><button id="templateButton">Tải mẫu CSV</button></div>
+        <div class="panel"><div class="section-heading"><div><h2>Nhập danh sách của nhóm</h2><p class="muted">Chọn nhóm cần nhập danh sách. Theo mẫu: TT · Họ và tên · Ngày sinh · Đơn vị. Họ tên bắt buộc; ngày sinh và đơn vị có thể để trống.</p></div><button id="templateButton">Tải mẫu CSV</button></div>
           <label>File danh sách<input id="rosterFile" type="file" accept=".xlsx,.csv"></label>
           <details><summary>Hoặc dán bảng từ Excel</summary><label>Nội dung gồm hàng tiêu đề<textarea id="rosterPaste" rows="5" placeholder="TT&#9;Họ và tên&#9;Ngày sinh&#9;Đơn vị"></textarea></label><button id="previewPaste">Xem trước nội dung</button></details>
-          <div id="importPreview" hidden><h3 id="previewHeading"></h3><ul id="previewMessages"></ul><div id="previewTable" class="table-scroll"></div><div class="import-controls"><label>Cách nhập<select id="importMode"><option value="replace">Thay thế danh sách hiện hành</option><option value="append">Thêm vào danh sách hiện hành</option></select></label><label class="checkbox"><input id="confirmImport" type="checkbox">Tôi đã kiểm tra danh sách và tên trùng</label><button id="commitImport" class="primary">Xác nhận nhập</button></div></div>
+          <div id="importPreview" hidden><h3 id="previewHeading"></h3><ul id="previewMessages"></ul><p id="importImpact" class="muted" aria-live="polite"></p><div id="previewTable" class="table-scroll"></div><div class="import-controls"><label>Cách nhập<select id="importMode"><option value="replace">Thay thế danh sách hiện hành</option><option value="append">Thêm vào danh sách hiện hành</option></select></label><label class="checkbox"><input id="confirmImport" type="checkbox">Tôi đã kiểm tra danh sách và tên trùng</label><button id="commitImport" class="primary">Xác nhận nhập</button></div></div>
         </div>
-        <div class="panel"><div class="section-heading"><div><h2 id="studentCount">Danh sách học viên</h2><p class="muted">Phiên đã có lượt gửi giữ danh sách riêng để bảo toàn lịch sử. Có thể đồng bộ rõ ràng bằng nút bên cạnh.</p></div><button id="syncRosterButton">Đồng bộ danh sách vào phiên đang chọn</button></div><button id="addStudentButton">Thêm học viên</button><div id="studentTable" class="table-scroll"></div></div>
+        <div class="panel"><div class="section-heading"><div><h2 id="studentCount">Danh sách người tham gia</h2><p class="muted">Phiên đã có lượt gửi giữ danh sách riêng để bảo toàn lịch sử. Có thể đồng bộ rõ ràng bằng nút bên cạnh.</p></div><button id="syncRosterButton">Đồng bộ danh sách vào phiên đang chọn</button></div><button id="addStudentButton">Thêm người tham gia</button><div id="studentTable" class="table-scroll"></div></div>
       </section>
       <section id="scheduleView" class="view" hidden>
-        <form id="scheduleForm" class="panel"><h2>Lịch riêng cho từng ngày</h2><p class="muted">Học viên dùng trang điểm danh chung. Toàn bộ khung giờ là đúng giờ; sau khung giờ vẫn nhận và tính muộn.</p>
+        <form id="scheduleForm" class="panel"><h2>Lịch riêng cho từng ngày</h2><p class="muted">Người tham gia dùng liên kết điểm danh của đúng nhóm. Toàn bộ khung giờ là đúng giờ; sau khung giờ vẫn nhận và tính muộn.</p>
           <label>Ngày<input type="date" name="day" id="scheduleDate" required></label>
           <div class="form-grid"><label>Sáng: mở<input type="time" name="morning_open" value="07:00" required></label><label>Sáng: hết giờ đúng giờ<input type="time" name="morning_deadline" value="08:00" required></label><label>Chiều: mở<input type="time" name="afternoon_open" value="13:30" required></label><label>Chiều: hết giờ đúng giờ<input type="time" name="afternoon_deadline" value="14:00" required></label></div>
-          <p class="muted">Nhận muộn sáng đến trước giờ mở chiều; nhận muộn chiều đến hết ngày.</p><label class="checkbox"><input type="checkbox" name="cancelled">Ngày nghỉ / hủy cả hai phiên</label>
+          <p class="muted">Nhận muộn sáng đến trước giờ mở chiều; nhận muộn chiều đến hết ngày.</p><label class="checkbox" id="cancelledScheduleLabel"><input type="checkbox" name="cancelled">Không tổ chức điểm danh ngày này</label>
           <button type="submit" class="primary">Lưu lịch ngày này</button>
         </form>
+      <form id="defaultScheduleForm" class="panel"><h2>Khung giờ mặc định</h2><p class="muted">Dùng khi tự tạo phiên mới. Lịch riêng và phiên đã tạo được giữ nguyên; chọn ngày phía trên để chỉnh riêng.</p><div class="form-grid">
+          <label>Sáng: mở<input type="time" name="morning_open" required></label><label>Sáng: hết giờ đúng giờ<input type="time" name="morning_deadline" required></label>
+          <label>Chiều: mở<input type="time" name="afternoon_open" required></label><label>Chiều: hết giờ đúng giờ<input type="time" name="afternoon_deadline" required></label></div><button class="primary">Lưu khung giờ mặc định</button></form>
       </section>
       <section id="settingsView" class="view" hidden>
-        <form id="settingsForm" class="panel"><div class="section-heading"><div><h2>Cài đặt lớp & vị trí</h2><p class="muted">Cài đặt được lưu trong database, không cần triển khai lại.</p></div><button type="button" id="newClassButton">Tạo lớp mới</button></div>
-          <div class="form-grid"><label>Tên lớp<input name="name" required maxlength="250"></label><label>Mã liên kết lớp<input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="lop-hoc"></label></div>
-          <label class="checkbox"><input type="checkbox" name="is_default">Lớp mặc định của trang điểm danh chung</label><label class="checkbox"><input type="checkbox" name="auto_daily">Tự tạo phiên mỗi ngày theo khung mặc định</label>
+        <form id="settingsForm" class="panel"><div class="section-heading"><div><h2>Cài đặt nhóm & vị trí</h2><p class="muted">Cấu hình được áp dụng sau khi lưu, không cần cập nhật lại ứng dụng.</p></div><button type="button" id="newClassButton">Tạo nhóm mới</button></div>
+          <div class="form-grid"><label>Tên nhóm<input name="name" required maxlength="250"></label><label>Mã liên kết nhóm<input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="lop-hoc"></label></div>
+          <label class="checkbox"><input type="checkbox" name="is_default">Nhóm mặc định của trang điểm danh chung</label><label class="checkbox"><input type="checkbox" name="auto_daily">Tự tạo phiên mỗi ngày theo khung mặc định</label>
           <h3>Tọa độ và khoảng cách</h3><div class="form-grid"><label>Vĩ độ<input type="number" name="latitude" step="any" min="-90" max="90" required></label><label>Kinh độ<input type="number" name="longitude" step="any" min="-180" max="180" required></label><label>Bán kính cho phép (m)<input type="number" name="radius" min="1" max="100000" step="any" required></label><label>Sai số GPS tối đa (m)<input type="number" name="max_accuracy" min="1" max="100000" step="any" required></label></div>
           <button type="button" id="locateClassButton">Lấy GPS tại vị trí đang đứng</button><p id="locationInfo" class="muted"></p><label class="checkbox"><input type="checkbox" name="apply_current">Áp dụng vị trí/bán kính mới cho các phiên chưa kết thúc</label>
           <h3>Khung giờ mặc định</h3><div class="form-grid"><label>Sáng: mở<input type="time" name="morning_open" required></label><label>Sáng: hết giờ đúng giờ<input type="time" name="morning_deadline" required></label><label>Chiều: mở<input type="time" name="afternoon_open" required></label><label>Chiều: hết giờ đúng giờ<input type="time" name="afternoon_deadline" required></label></div>
@@ -78,15 +81,15 @@
       </section>
       <section id="auditView" class="view" hidden><div class="panel"><h2>100 thay đổi gần nhất</h2><div id="auditTable" class="table-scroll"></div></div></section>
       <section id="dataView" class="view" hidden>
-        <div class="panel danger-panel"><h2>Dữ liệu của lớp đang chọn</h2><p id="deleteClassLabel" class="muted"></p>
-          <div class="delete-option"><div><h3>Xóa kết quả điểm danh của lớp</h3><p class="muted">Xóa các lượt điểm danh, lý do, ghi chú xử lý thiết bị và nhật ký liên quan. Giữ danh sách học viên, lịch phiên và cài đặt lớp.</p></div><button type="button" class="danger" id="clearClassAttendanceButton">Xóa dữ liệu điểm danh của lớp</button></div>
-          <div class="delete-option"><div><h3>Xóa lớp học</h3><p class="muted">Xóa lớp cùng danh sách học viên, lịch phiên và toàn bộ dữ liệu của lớp. Các lớp khác được giữ. Bạn có thể tạo lại lớp sau.</p></div><button type="button" class="danger" id="deleteClassButton">Xóa lớp học này</button></div>
+        <div class="panel danger-panel"><h2>Dữ liệu của nhóm đang chọn</h2><p id="deleteClassLabel" class="muted"></p>
+          <div class="delete-option"><div><h3>Xóa kết quả điểm danh của nhóm</h3><p class="muted">Xóa các lượt điểm danh, lý do, ghi chú xử lý thiết bị và nhật ký liên quan. Giữ danh sách người tham gia, lịch phiên và cài đặt nhóm.</p></div><button type="button" class="danger" id="clearClassAttendanceButton">Xóa dữ liệu điểm danh của nhóm</button></div>
+          <div class="delete-option"><div><h3>Xóa nhóm điểm danh</h3><p class="muted">Xóa nhóm cùng danh sách người tham gia, lịch phiên và toàn bộ dữ liệu của nhóm. Các nhóm khác được giữ. Bạn có thể tạo lại nhóm sau.</p></div><button type="button" class="danger" id="deleteClassButton">Xóa nhóm điểm danh này</button></div>
         </div>
-        <div class="panel danger-panel"><h2>Xóa toàn bộ dữ liệu ứng dụng</h2><p class="muted">Xóa tất cả lớp học, danh sách học viên, lịch phiên, kết quả điểm danh, lý do và nhật ký cũ. Giữ tài khoản admin và cấu trúc hệ thống để bạn đăng nhập và tạo lớp lại.</p><button type="button" class="danger" id="clearAllDataButton">Xóa toàn bộ dữ liệu</button></div>
+        <div class="panel danger-panel"><h2>Xóa toàn bộ dữ liệu ứng dụng</h2><p class="muted">Xóa tất cả nhóm điểm danh, danh sách người tham gia, lịch phiên, kết quả điểm danh, lý do và nhật ký cũ. Giữ tài khoản admin và cấu trúc hệ thống để bạn đăng nhập và tạo nhóm lại.</p><button type="button" class="danger" id="clearAllDataButton">Xóa toàn bộ dữ liệu</button></div>
         <p class="muted">Các nút sẽ mở bản xem trước số lượng dữ liệu trước khi xác nhận. Dữ liệu đã xóa không khôi phục trực tiếp trong ứng dụng.</p>
       </section>
       <section id="viewersView" class="view" hidden>
-        <div class="panel"><h2>Tài khoản lớp trưởng</h2><p class="muted">Chỉ xem Tổng quan của lớp được giao. Không được sửa, duyệt, xuất CSV hoặc xóa dữ liệu.</p><button id="createViewerButton" class="primary">Cấp tài khoản lớp trưởng</button><button id="checkViewerAuthButton">Kiểm tra kết nối Supabase</button><div id="viewerAccounts" class="table-scroll"></div></div>
+        <div class="panel"><h2>Tài khoản quản lý nhóm</h2><p class="muted">Xem Tổng quan nhóm được giao. Admin có thể cấp thêm quyền nhập danh sách và chỉnh lịch; các thao tác quản trị khác dành cho admin.</p><button id="createViewerButton" class="primary">Cấp tài khoản người quản lý nhóm</button><button id="checkViewerAuthButton">Kiểm tra kết nối Supabase</button><div id="viewerAccounts" class="table-scroll"></div></div>
       </section>
       <section id="accountView" class="view" hidden><form id="passwordForm" class="panel narrow"><h2>Đổi mật khẩu quản trị</h2><label>Mật khẩu mới<input name="password" type="password" minlength="12" autocomplete="new-password" required></label><label>Nhập lại mật khẩu<input name="confirmation" type="password" minlength="12" autocomplete="new-password" required></label><p class="muted">Sau khi đổi mật khẩu, đăng nhập lại. Nếu quên mật khẩu, quản trị project có thể đặt lại trong Supabase Authentication.</p><button class="primary" type="submit">Đổi mật khẩu</button></form></section>
     </main>

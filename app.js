@@ -101,7 +101,7 @@
       settingsReady = true;
       requestGpsLocation();
     } catch (error) {
-      updateGpsUI("error", "Chưa tải được cài đặt lớp", error.message);
+      updateGpsUI("error", "Chưa tải được cài đặt nhóm", error.message);
       btnSubmit.disabled = true;
       btnSubmitText.textContent = "Bấm Quét lại để kết nối";
     }
@@ -109,7 +109,7 @@
     // Gán sự kiện cho form & nút quét lại GPS
     if (btnRefreshGps) btnRefreshGps.addEventListener("click", async () => {
       try { await loadClassSettings(); settingsReady = true; requestGpsLocation(true); }
-      catch (error) { settingsReady = false; updateGpsUI("error", "Chưa tải được cài đặt lớp", error.message); updateSubmitButtonState(); }
+      catch (error) { settingsReady = false; updateGpsUI("error", "Chưa tải được cài đặt nhóm", error.message); updateSubmitButtonState(); }
     });
     if (attendanceForm) attendanceForm.addEventListener("submit", handleFormSubmit);
 
@@ -315,14 +315,14 @@
           absentReasonInput.required = true;
           btnSubmit.classList.add("btn-absent");
 
-          // Báo vắng không bắt buộc GPS phòng học
+          // Báo vắng không bắt buộc GPS vị trí điểm danh
           btnSubmit.disabled = false;
           btnSubmitText.textContent = "Gửi Báo Vắng Có Lý Do";
 
           updateGpsUI(
             "info",
             "ℹ️ Chế độ Báo vắng có lý do",
-            "Không yêu cầu bạn phải có mặt tại phòng học. Vị trí hiện tại vẫn được ghi nhận để lưu vết."
+            "Không yêu cầu bạn phải có mặt tại vị trí điểm danh. Vị trí hiện tại vẫn được ghi nhận để lưu vết."
           );
         }
       });
@@ -407,7 +407,7 @@
         updateGpsUI(
           "success",
           `🟢 Vị trí hợp lệ (~${distRounded}m)`,
-          `Bạn đang cách phòng học khoảng <b>${distRounded}m</b> (Bán kính cho phép: ${config.ALLOWED_RADIUS_METERS}m, Sai số GPS: ±${accRounded}m).`
+          `Bạn đang cách vị trí điểm danh khoảng <b>${distRounded}m</b> (Bán kính cho phép: ${config.ALLOWED_RADIUS_METERS}m, Sai số GPS: ±${accRounded}m).`
         );
       }
     } else {
@@ -415,8 +415,8 @@
       if (currentStatus === "Có mặt") {
         updateGpsUI(
           "error",
-          `🔴 Ngoài phạm vi phòng học (~${distRounded}m)`,
-          `Khoảng cách hiện tại: <b>${distRounded}m</b>. Yêu cầu có mặt trong phòng học (tối đa <b>${config.ALLOWED_RADIUS_METERS}m</b>).`
+          `🔴 Ngoài phạm vi vị trí điểm danh (~${distRounded}m)`,
+          `Khoảng cách hiện tại: <b>${distRounded}m</b>. Yêu cầu có mặt trong vị trí điểm danh (tối đa <b>${config.ALLOWED_RADIUS_METERS}m</b>).`
         );
       }
     }
@@ -501,7 +501,7 @@
     }
 
     if (currentStatus === "Có mặt" && !currentUserLocation.isValid) {
-      alert("Vị trí của bạn đang ở ngoài phòng học. Không thể điểm danh 'Có mặt'!");
+      alert("Vị trí của bạn đang ở ngoài vị trí điểm danh. Không thể điểm danh 'Có mặt'!");
       return;
     }
 
@@ -512,7 +512,7 @@
     }
 
     if (!settingsReady || !activeClassId) {
-      alert("Chưa tải được cài đặt lớp. Vui lòng bấm Quét lại.");
+      alert("Chưa tải được cài đặt nhóm. Vui lòng bấm Quét lại.");
       return;
     }
 

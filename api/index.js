@@ -8,7 +8,7 @@ const {previewImport,csv}=require('../lib/import');
 const {previewDeletion,deleteData}=require('../lib/delete-data');
 const {authorize,visibleClasses,roleOf}=require('../lib/permissions');
 const {listViewers,saveViewer,checkViewerAuth}=require('../lib/viewer-accounts');
-const mutationActions=new Set(['login','refresh','logout','attendance','preview-import','import','save-class','save-schedule','reconcile','review-reason','resolve-device','change-password','save-student','sync-roster','manual-attendance','delete-data','save-viewer']);
+const mutationActions=new Set(['login','refresh','logout','attendance','preview-import','import','save-class','save-schedule','reconcile','review-reason','resolve-device','change-password','save-student','sync-roster','manual-attendance','delete-data','save-viewer','save-default-schedule']);
 function createHandler(dependencies={}){
   return async function handler(req,res){
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
@@ -34,7 +34,7 @@ function createHandler(dependencies={}){
         return json(res,await store.submit(db,input.classId||url.searchParams.get('class'),input));
       }
       const actor=dependencies.requireAdmin?await dependencies.requireAdmin(db,req):await auth.requireAdmin(db,req);
-      await authorize(db,actor,action,url);
+      await authorize(db,actor,action,url,input);
       switch(action){
         case 'me':return json(res,{email:actor.email,role:roleOf(actor)});
         case 'classes':return json(res,await visibleClasses(db,actor));
@@ -43,9 +43,10 @@ function createHandler(dependencies={}){
         case 'save-viewer':return json(res,await saveViewer(db,input,actor,dependencies.adminAuth));
         case 'students':return json(res,await store.listStudents(db,store.uuid(url.searchParams.get('class_id'))));
         case 'dashboard':return json(res,await store.dashboard(db,url.searchParams.get('class_id'),url.searchParams.get('day')||vnDate(),url.searchParams.get('session_id')));
-        case 'preview-import':return json(res,await previewImport(input));
+        case 'preview-import':return json(res,{...await previewImport(input),class_id:input.class_id||null});
         case 'import':return json(res,await store.importStudents(db,store.uuid(input.class_id),input.rows,input.mode,actor.user_id));
         case 'save-class':return json(res,await store.saveClass(db,input,actor.user_id));
+        case 'save-default-schedule':return json(res,await store.saveDefaultSchedule(db,input,actor.user_id));
         case 'save-schedule':return json(res,await store.saveSchedule(db,input,actor.user_id));
         case 'reconcile':return json(res,await store.reconcile(db,input,actor.user_id));
         case 'review-reason':return json(res,await store.reviewReason(db,input,actor.user_id));
@@ -64,7 +65,7 @@ function createHandler(dependencies={}){
           const {error}=await client.auth.updateUser({password:input.password});if(error)throw new AppError('Không đổi được mật khẩu. Hãy thử lại hoặc kiểm tra chính sách Supabase.');
           auth.setSession(res,null);return json(res,{updated:true});
         }
-        case 'template':res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="MAU_DS_LOP.csv"');return res.end(csv([['TT','Họ và tên','Ngày sinh','Đơn vị'],[1,'','','']]));
+        case 'template':res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="MAU_DS_DIEM_DANH.csv"');return res.end(csv([['TT','Họ và tên','Ngày sinh','Đơn vị'],[1,'','','']]));
         case 'export':{
           const d=await store.dashboard(db,url.searchParams.get('class_id'),url.searchParams.get('day')||vnDate(),url.searchParams.get('session_id'));
           res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="diem-danh.csv"');

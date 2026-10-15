@@ -5,6 +5,7 @@ async function createTestDb(){
   const engine=new PGlite();await engine.waitReady;
   await engine.exec(await fs.readFile(path.join(__dirname,'../migrations/001_core.sql'),'utf8'));
   await engine.exec(await fs.readFile(path.join(__dirname,'../migrations/003_class_viewers.sql'),'utf8'));
+  await engine.exec(await fs.readFile(path.join(__dirname,'../migrations/005_group_permissions.sql'),'utf8'));
   let tail=Promise.resolve();
   async function lock(){let release;const wait=tail;tail=new Promise(resolve=>{release=resolve;});await wait;return release;}
   const query=(sql,params=[])=>engine.query(sql,params);

@@ -5,9 +5,12 @@ const store=require('../lib/store');const {previewImport,csv}=require('../lib/im
 let db,c,actor;
 before(async()=>{db=await createTestDb();({c,actor}=await seed(db));});after(async()=>{await db.close();});
 const at=time=>new Date(`2026-10-13T${time}+07:00`);
-test('Giữ nguyên HTML/CSS gốc',async()=>{
-  const expected={'index.html':'268e0a83c268143bd69a0fe0b1b4bf9dfab010438ad98c49672081e0b18fd166','style.css':'367bdde2e86102d38309d2096c30b6903ab4ec2c99b7c51a5f3f1ba0c9becc5b'};
-  for(const [file,hash]of Object.entries(expected))assert.equal(createHash('sha256').update(await fs.readFile(path.join(__dirname,'..',file))).digest('hex'),hash);
+test('Giữ cấu trúc trang điểm danh và CSS gốc khi đổi câu chữ',async()=>{
+  const html=await fs.readFile(path.join(__dirname,'../index.html'),'utf8');
+  const structure=html.match(/<!--[\s\S]*?-->|<[^>]+>/g).filter(t=>!t.startsWith('<!--')).map(t=>t.replace(/\b(title|placeholder|aria-label)="[^"]*"/g,'$1=""').replace(/\s+/g,' ')).join('\n');
+  assert.equal(createHash('sha256').update(structure).digest('hex'),'5921f412f76c770569b8eef08fe3e098aa312cafcb9104a07181699fce82864f');
+  assert.equal(createHash('sha256').update(await fs.readFile(path.join(__dirname,'../style.css'))).digest('hex'),'367bdde2e86102d38309d2096c30b6903ab4ec2c99b7c51a5f3f1ba0c9becc5b');
+  assert.match(html,/<title>Điểm danh<\/title>/);assert.ok(!html.includes('LỚP HỌC'));
 });
 test('Retry sau lỗi mạng trả cùng biên nhận; payload khác không dùng lại mã gửi',async()=>{
   const p=payload();const first=await store.submit(db,c.id,p,at('07:25:00'));

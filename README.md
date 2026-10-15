@@ -1,70 +1,45 @@
-# Điểm danh GPS · PostgreSQL & trang admin
+# Điểm danh · PostgreSQL & trang quản trị
 
-Bản nâng cấp từ repo `ludarao/diemdanh` (mốc `44b1ade`). Giao diện học viên dùng nguyên `index.html` và `style.css` gốc; chỉ phần JavaScript gửi/lưu dữ liệu được thay bằng API cùng tên miền. Dashboard quản trị ở `/admin`.
+Phần mềm điểm danh chung cho lớp học, họp, tập huấn hoặc nhóm làm việc, nâng cấp từ repo `ludarao/diemdanh`. Đơn vị tổ chức là **nhóm điểm danh**, danh sách gồm **người tham gia**, mỗi khung thời gian là một **phiên điểm danh**. Trang điểm danh giữ cấu trúc và CSS gốc, cập nhật câu chữ chung; dashboard ở `/admin`.
 
 ## Chức năng
 
-- PostgreSQL trên Supabase; Vercel phục vụ trang web và API Node.js.
-- Admin đăng nhập bằng email/mật khẩu Supabase Auth, cookie HttpOnly, có đăng xuất/đổi mật khẩu.
-- Admin cấp/giao/khóa tài khoản lớp trưởng và cấp lại mật khẩu. Lớp trưởng chỉ xem dashboard lớp được giao; API và RLS chặn lớp khác và mọi thao tác quản trị/export. Cần migrations 003/004 và `SUPABASE_SERVICE_ROLE_KEY` ở server để cấp tài khoản.
-- Nhập `.xlsx` hoặc CSV theo mẫu `TT | Họ và tên | Ngày sinh | Đơn vị`; xem trước lỗi và tên trùng; thêm/sửa/ngừng sử dụng học viên. Có mẫu CSV để tải và vùng dán bảng Excel.
-- Dò tên có dấu, không phân biệt hoa/thường và khoảng trắng thừa. Không tự bỏ dấu, sửa chính tả hoặc ghép tên gần giống. Tên không khớp và tên trùng được lưu để đối chiếu thủ công.
-- Sáng đúng giờ 07:00–08:00, muộn sau 08:00 đến trước 13:30. Chiều đúng giờ 13:30–14:00, muộn sau 14:00 đến hết ngày. Dùng giờ server tại Việt Nam.
-- Lịch mặc định theo lớp, tự tạo hai phiên trong ngày khi có truy cập; chỉnh riêng từng ngày/ngày nghỉ trên admin. Phiên chỉ xuất hiện ở admin.
-- Dashboard theo lớp/ngày/phiên: vắng, có lý do, chưa điểm danh, trùng thiết bị, tên không khớp, ngoài phiên. Có duyệt lý do, ghi nhận thủ công, đối chiếu tên, xuất CSV và nhật ký.
-- Chỉnh tọa độ, lấy GPS hiện tại, bán kính cho phép, ngưỡng sai số GPS trong admin. Server tính lại khoảng cách; giữ cấu hình đã áp dụng ở từng lượt gửi.
-- Supabase Realtime khi được cấu hình; đối chiếu mỗi 60 giây khi đang kết nối, dự phòng mỗi 15 giây khi mất Realtime. Gộp sự kiện theo đợt, tự cập nhật ở mốc mở/hết giờ, dừng gọi API dashboard khi tab ẩn hoặc đang ở mục quản trị khác.
-
-- Mục **Dữ liệu & xóa lớp**: xóa kết quả điểm danh của một lớp (giữ danh sách/lịch/cài đặt), xóa cả một lớp, hoặc xóa toàn bộ dữ liệu lớp học. Xem số lượng trước khi xóa, nhập câu xác nhận và đánh dấu đồng ý; giữ tài khoản admin để tạo lại lớp.
+- PostgreSQL trên Supabase; Vercel phục vụ web và API Node.js. Luồng hoạt động mới không dùng Google Sheets.
+- Admin đăng nhập Supabase Auth bằng email/mật khẩu, cookie HttpOnly. Cấp/giao/khóa tài khoản quản lý nhóm, cấp lại mật khẩu, quản lý toàn hệ thống.
+- Người quản lý mặc định chỉ xem nhóm được giao. Admin cấp riêng **Nhập và đồng bộ danh sách** và **Chỉnh lịch ngày/khung giờ mặc định** cho từng nhóm. API kiểm tra quyền trước khi ghi; RLS giới hạn đọc theo nhóm và chặn ghi trực tiếp.
+- Người quản lý không duyệt lý do, sửa/gán kết quả, ghi nhận thủ công, sửa từng người bằng tay, xuất CSV, sửa GPS/bán kính, quản lý tài khoản hoặc xóa nhóm/dữ liệu.
+- Nhập Excel/CSV hoặc dán bảng theo mẫu `TT | Họ và tên | Ngày sinh | Đơn vị`; xem trước lỗi/tên trùng và phạm vi trước xác nhận nhập thêm/thay thế. Ngày sinh và Đơn vị trong danh sách có thể trống. Mẫu cũ vẫn được đọc.
+- Dò tên có dấu, không phân biệt hoa/thường/khoảng trắng thừa; giữ tên sai/tên trùng để admin đối chiếu, không tự ghép gần giống.
+- Mặc định sáng 07:00–08:00 và chiều 13:30–14:00 là đúng giờ. Sáng nhận muộn đến trước giờ mở chiều, chiều đến hết ngày; dùng giờ server Việt Nam.
+- Lịch riêng từng ngày và bốn mốc giờ mặc định. Đổi mặc định chỉ ảnh hưởng phiên tự tạo sau đó; lịch riêng/phiên đã tạo được giữ. Đổi lịch có lượt gửi cần xác nhận và ghi nhật ký. Chỉ admin hủy/mở lại ngày không tổ chức điểm danh.
+- Dashboard theo nhóm/ngày/phiên: vắng, có lý do, chưa điểm danh, trùng thiết bị, tên không khớp, ngoài phiên. Admin có xử lý/duyệt, xuất CSV và nhật ký.
+- Admin chỉnh vị trí/bán kính/sai số GPS. Server kiểm tra lại GPS và giữ cấu hình đã áp dụng ở từng lượt gửi.
+- Admin dùng Realtime khi được cấu hình, đối chiếu mỗi 60 giây hoặc dự phòng 15 giây. Quản lý nhóm dùng đối chiếu 15 giây. Dừng tự tải dashboard khi tab ẩn hoặc mở mục quản trị khác.
+- **Quản lý dữ liệu**: xóa kết quả một nhóm, xóa nhóm hoặc toàn bộ dữ liệu; có xem trước, nhập câu xác nhận và transaction hoàn tác khi lỗi. Giữ tài khoản để tạo/giao nhóm lại.
 
 ## Chạy và triển khai
 
-Đọc [hướng dẫn cấu hình Supabase và Vercel](docs/HUONG_DAN_TRIEN_KHAI.md). Cần Node.js 22 hoặc mới hơn.
+Đọc [hướng dẫn cấu hình và cấp quyền](docs/HUONG_DAN_TRIEN_KHAI.md). Cần Node.js 22+.
 
 ```bash
 npm ci
 cp .env.example .env.local
-# Điền các biến vào .env.local, không commit file này.
+# Điền biến trong editor, không commit secrets.
 npm run migrate
+npm test
+npm run build
 npm run dev
 ```
 
-Trang học viên: `http://localhost:3000/`. Trang quản trị: `http://localhost:3000/admin`.
+Trang điểm danh: `http://localhost:3000/`. Admin/quản lý nhóm: `http://localhost:3000/admin`.
 
-```bash
-npm test
-npm run build
-```
+Cần migrations 001–005. Bản đang nâng cấp cần thêm `005_group_permissions.sql`; các quyền mới mặc định tắt. Admin mở **Tài khoản quản lý nhóm → Cấp quyền** để bật cho tài khoản hiện có. Không cần khóa mới cho việc cấp thêm quyền; `SUPABASE_SERVICE_ROLE_KEY` ở server dùng để tạo/cấp lại mật khẩu tài khoản.
 
-`npm run dev` tạo lại `dist/` khi khởi động. Sau khi sửa mã nguồn, khởi động lại để xem bản mới.
+## Dữ liệu và tương thích
 
-## Dữ liệu và quy tắc
-
-- File danh sách thật không được nhúng vào mã nguồn hoặc bản web công khai. Nhập từ admin sau khi đăng nhập. File nguồn của người dùng chỉ được dùng để kiểm tra bộ đọc Excel tại máy làm việc.
-- Ngày sinh chỉ nằm trong danh sách quản trị; không trả về API công khai. Học viên không cần mã hay tài khoản.
-- Trước hạn đúng giờ: chưa điểm danh. Sau hạn: vắng, và chuyển sang đi muộn nếu nhận được lượt có mặt tiếp theo trong khoảng nhận muộn.
-- Báo vắng/đi muộn bằng form cũ tạo yêu cầu có lý do, chưa được coi là có mặt. Admin duyệt phép; nếu sau đó có lượt có mặt thì thời điểm có mặt quyết định đúng giờ/muộn.
-- Tên không khớp không làm tăng sĩ số hoặc số có mặt của danh sách gốc. Tên trùng nhiều học viên không tự liên kết; đơn vị/ngày sinh hỗ trợ quản trị đối chiếu.
-- Một học viên có thể gửi nhiều lượt; lịch sử được giữ, bảng tổng hợp lấy lần có mặt đầu tiên trong phiên. Retry cùng request ID trả lại cùng biên nhận.
-- Cảnh báo trùng thiết bị là cờ đối chiếu, không tự kết luận gian lận. Device ID là dấu hiệu của trình duyệt, không phải định danh phần cứng chắc chắn.
-- Ngày do học viên chọn được giữ như thông tin khai báo. Giờ server quyết định phiên, đúng giờ và muộn.
-- Lượt ngoài lịch vẫn được lưu sau kiểm tra đầu vào/GPS tương ứng, admin có thể gán lại phiên. Lượt có mặt ngoài bán kính hoặc GPS vượt ngưỡng sẽ bị từ chối như luồng điểm danh gốc.
-- Thay danh sách lớp không âm thầm xóa lịch sử phiên đã điểm danh. Admin chọn “Đồng bộ danh sách vào phiên đang chọn” để áp dụng rõ ràng; thao tác có nhật ký.
-- Ngoại lệ sửa lỗi: nếu phiên được tạo khi danh sách lớp còn rỗng, hệ thống tự điền danh sách cho phiên rỗng và khớp lại các lượt đã gửi theo tên chính xác, duy nhất. Không cần gửi lại điểm danh; giờ gửi, tên nhập, lý do và tình trạng duyệt được giữ. Bản cũ có snapshot rỗng được phục hồi khi mở dashboard của phiên; các snapshot đã có học viên vẫn giữ lịch sử.
-- Tài khoản trong `admin_users` là quản trị toàn bộ ứng dụng. Phiên bản này chưa có vai trò giảng viên giới hạn theo từng lớp.
-
-## Cấu trúc
-
-- `app.js`, `config.js`: kết nối API, nhận cấu hình lớp và biên nhận server.
-- `admin/`: trang quản trị riêng.
-- `api/index.js`: API chung; mọi thao tác quản trị cần xác thực.
-- `lib/`: luật nghiệp vụ, truy cập database, đăng nhập, đọc Excel.
-- `migrations/`: tạo bảng, index, RLS và đăng ký Realtime.
-- `tests/`: kiểm thử luật nghiệp vụ/API/PostgreSQL bằng PGlite, gồm giữ nguyên HTML/CSS.
-- `google_apps_script.js`: mã cũ chỉ để đối chiếu; không còn được gọi và không đưa vào `dist/`.
-
-## Phạm vi kiểm chứng
-
-Đã kiểm thử cục bộ nghiệp vụ trên PostgreSQL nhúng PGlite, đọc file mẫu 80 học viên, kiểm tra API từ chối truy cập ẩn danh và thao tác admin qua trình duyệt với dữ liệu giả. Các bài kiểm thử đồng thời cục bộ kiểm tra tính idempotent nhưng không thay thế đo tải nhiều kết nối PostgreSQL thật.
-
-Cần kiểm tra Supabase Auth, TLS/pooler, Realtime và Vercel trên project thật sau khi cấu hình; chưa có tài khoản/project nên chưa triển khai cloud. Bản kiểm thử giao diện dùng dữ liệu giả tại máy, không phải database production.
+- URL `?class=...`, mã/tên nhóm người dùng đã tạo, tài khoản và dữ liệu cũ được giữ. Không đổi tên bảng classes/students/class_viewers để đổi nhãn.
+- Bảng tổng hợp lấy lần có mặt đầu tiên của từng người/phiên; giữ lịch sử lượt gửi. Retry cùng request ID không tạo thêm bản ghi.
+- Nhập danh sách không âm thầm thay snapshot của phiên đã có lượt gửi. Người có quyền chọn đồng bộ để áp dụng cho đúng phiên. Snapshot rỗng được tự phục hồi; giữ tên nhập, giờ gửi, lý do và tình trạng duyệt.
+- Ngày sinh không trả qua API công khai. File danh sách thật không nhúng vào mã nguồn/build; `.local/` bị loại khỏi Git.
+- Cảnh báo thiết bị là dấu hiệu cần đối chiếu, không tự kết luận gian lận. GPS do trình duyệt cung cấp vẫn cần kiểm chứng theo quy trình thực tế.
+- Chưa có bộ nhập tự động lịch sử Google Sheets cũ, thêm phiên thứ ba hoặc đo tải production. Kiểm thử PGlite/fixture cục bộ không thay thế đo tải PostgreSQL thật.

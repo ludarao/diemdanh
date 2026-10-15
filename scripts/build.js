@@ -6,6 +6,6 @@ async function build(){
   for(const file of ['index.html','style.css','config.js','app.js'])await fs.copyFile(path.join(root,file),path.join(out,file));
   for(const file of ['index.html','admin.css'])await fs.copyFile(path.join(root,'admin',file),path.join(out,'admin',file));
   await esbuild.build({entryPoints:[path.join(root,'admin/admin.js')],outfile:path.join(out,'admin/admin.js'),bundle:true,format:'esm',platform:'browser',minify:true,target:['es2020'],legalComments:'none'});
-  console.log('Built student page (original HTML/CSS) and admin dashboard into dist/.');
+  console.log('Built attendance page (preserved layout/CSS) and admin dashboard into dist/.');
 }
 build().catch(e=>{console.error(e.message);process.exitCode=1;});

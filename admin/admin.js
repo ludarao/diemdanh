@@ -9,6 +9,16 @@ const hm=value=>new Date(value).toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Ch
 const today=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
 const state={role:'admin',viewers:[],classes:[],classId:'',view:'dashboard',filter:'absent',data:null,students:[],preview:null,newClass:false,loading:false,realtime:null,authTimer:null,dialogAction:null,deletionPreview:null};
 const canManage=()=>state.role==='admin';
+const currentGroup=()=>state.classes.find(c=>c.id===state.classId);
+const canImport=()=>canManage()||!!currentGroup()?.can_import_roster;
+const canEditSchedule=()=>canManage()||!!currentGroup()?.can_edit_schedule;
+const canOpen=view=>canManage()||view==='dashboard'||view==='students'&&canImport()||view==='schedule'&&canEditSchedule();
+function applyPermissions(){
+  for(const b of document.querySelectorAll('.nav-item'))b.hidden=!canOpen(b.dataset.view);
+  $('#exportButton').hidden=!canManage();$('#addStudentButton').hidden=!canManage();
+  $('#cancelledScheduleLabel').hidden=!canManage();$('#scheduleForm').elements.cancelled.disabled=!canManage();
+}
+
 let refreshPromise=null,noticeTimer,realtimeGeneration=0,lastRealtimeSetup=0;
 const updater=createDashboardUpdater({refresh:()=>loadDashboard(true)});
 function dashboardVisible(){return !$('#appView').hidden&&state.view==='dashboard'&&!document.hidden;}
@@ -38,27 +48,26 @@ function showLogin(){
   if(state.realtime){state.realtime.removeAllChannels();state.realtime=null;}
 }
 async function boot(){
-  const user=await api('me');state.role=user.role||'admin';$('#userEmail').textContent=`${user.email}${canManage()?'':' · Chỉ xem'}`;
-  for(const button of document.querySelectorAll('.nav-item'))button.hidden=!canManage()&&button.dataset.view!=='dashboard';
-  $('#exportButton').hidden=!canManage();
+  const user=await api('me');state.role=user.role||'admin';$('#userEmail').textContent=`${user.email}${canManage()?'':' · Người quản lý nhóm'}`;
+
   state.classes=await api('classes');
   for(const button of document.querySelectorAll('.nav-item'))button.disabled=!state.classes.length&&['dashboard','students','schedule'].includes(button.dataset.view);
   $('#dashboardContent').hidden=!state.classes.length;$('#noAssignedClass').hidden=canManage()||!!state.classes.length;
   if(!state.classes.length){
     state.classId='';state.data=null;state.students=[];state.preview=null;$('#importPreview').hidden=true;
-    $('#classSelect').innerHTML='<option value="">Chưa có lớp học</option>';$('#classSelect').disabled=true;
+    $('#classSelect').innerHTML='<option value="">Chưa có nhóm điểm danh</option>';$('#classSelect').disabled=true;
     $('#sessionSelect').innerHTML='';updater.pause();updater.setRealtimeConnected(false);clearInterval(state.authTimer);
     realtimeGeneration++;if(state.realtime){await state.realtime.removeAllChannels();state.realtime=null;}
     $('#loginView').hidden=true;$('#appView').hidden=false;
-    await openView(canManage()?'settings':'dashboard');if(canManage())prepareNewClass();return;
+    applyPermissions();await openView(canManage()?'settings':'dashboard');if(canManage())prepareNewClass();return;
   }
   $('#classSelect').disabled=false;
   if(!state.classes.some(c=>c.id===state.classId))state.classId=state.classes[0].id;
   $('#classSelect').innerHTML=state.classes.map(c=>`<option value="${h(c.id)}">${h(c.name)}</option>`).join('');$('#classSelect').value=state.classId;
   $('#loginView').hidden=true;$('#appView').hidden=false;
-  if(!canManage())state.view='dashboard';
+  applyPermissions();if(!canOpen(state.view))state.view='dashboard';
   await loadDashboard();if(canManage())fillSettings();await setupRealtime();
-  if(!canManage())await openView('dashboard');
+  await openView(state.view);
   updateRefreshActivity();
   clearInterval(state.authTimer);state.authTimer=setInterval(()=>{if(dashboardVisible())setupRealtime();},45*60*1000);
 }
@@ -100,9 +109,9 @@ async function loadDashboard(quiet=false){
     if($('#sessionSelect').innerHTML!==sessionOptions)$('#sessionSelect').innerHTML=sessionOptions;
     if(d.session)$('#sessionSelect').value=d.session.id;
     $('#sessionHeading').textContent=d.session?`${d.session.name} · ${d.phase}`:'Chưa có phiên cho ngày này';
-    $('#sessionDetail').textContent=d.session?`Đúng giờ ${hm(d.session.opens_at)}–${hm(d.session.deadline_at)} · Nhận muộn đến ${hm(d.session.accepts_until)} · Bán kính ${d.session.radius}m${d.roster_status==='empty'?' · Chưa có danh sách học viên: nhập danh sách cho đúng lớp.':''}`:'Tạo lịch trong mục Lịch điểm danh.';
+    $('#sessionDetail').textContent=d.session?`Đúng giờ ${hm(d.session.opens_at)}–${hm(d.session.deadline_at)} · Nhận muộn đến ${hm(d.session.accepts_until)} · Bán kính ${d.session.radius}m${d.roster_status==='empty'?' · Chưa có danh sách người tham gia: nhập danh sách cho đúng nhóm.':''}`:'Tạo lịch trong mục Lịch & phiên điểm danh.';
     $('#updatedAt').textContent=`Cập nhật ${fmt(d.server_time)}`;
-    const cards=[['total','Sĩ số',''],['present','Đúng giờ','positive'],['late','Đi muộn','warning'],['pending','Chưa điểm danh',''],['excused','Vắng có phép',''],['absent','Vắng không phép','danger']];
+    const cards=[['total','Tổng số người',''],['present','Đúng giờ','positive'],['late','Đi muộn','warning'],['pending','Chưa điểm danh',''],['excused','Vắng có phép',''],['absent','Vắng không phép','danger']];
     $('#statCards').innerHTML=cards.map(([key,label,color])=>`<div class="stat-card ${color}"><small>${label}</small><strong>${d.counts[key]||0}</strong></div>`).join('');
     renderResults();
   }catch(e){$('#connectionState').textContent='● Mất kết nối · dữ liệu chưa cập nhật';$('#connectionState').classList.remove('live');if(!quiet)notice(e.message,true);}
@@ -115,11 +124,11 @@ const badge=(status,label)=>`<span class="badge ${h(status)}">${h(label||labels[
 function searchMatches(row){const query=$('#searchInput').value.trim().toLocaleLowerCase('vi');return !query||`${row.name||row.entered_name} ${row.unit||row.entered_unit||''}`.toLocaleLowerCase('vi').includes(query);}
 function renderResults(){
   const d=state.data;if(!d)return;
-  const titles={absent:'Danh sách vắng',reason:'Vắng / đi muộn có lý do',pending:'Chưa điểm danh',duplicate:'Các nhóm trùng thiết bị',unmatched:'Đã gửi nhưng không khớp danh sách gốc',outside:'Lượt gửi chưa xác định phiên',all:'Tất cả học viên trong phiên'};
-  const hints={absent:'Sau hạn đúng giờ, người chưa có mặt được tính vắng. Lượt đến muộn sẽ cập nhật lại.',reason:'Lý do được giữ riêng với kết quả có mặt. Chọn chi tiết để duyệt từng yêu cầu.',pending:'Danh sách này áp dụng trước khi hết giờ đúng giờ.',duplicate:'Cảnh báo để kiểm tra, không tự kết luận gian lận. Không cộng nhóm này vào sĩ số.',unmatched:'Giữ nguyên tên đã nhập. Tên trùng trong danh sách gốc cũng cần bạn đối chiếu.',outside:'Lượt ngoài lịch vẫn được lưu. Bạn có thể gán thủ công vào đúng phiên.',all:'Số liệu dựa trên danh sách gốc của phiên, mỗi học viên chỉ có một kết quả chính.'};
+  const titles={absent:'Danh sách vắng',reason:'Vắng / đi muộn có lý do',pending:'Chưa điểm danh',duplicate:'Các nhóm trùng thiết bị',unmatched:'Đã gửi nhưng không khớp danh sách của nhóm',outside:'Lượt gửi chưa xác định phiên',all:'Tất cả người tham gia trong phiên'};
+  const hints={absent:'Sau hạn đúng giờ, người chưa có mặt được tính vắng. Lượt đến muộn sẽ cập nhật lại.',reason:'Lý do được giữ riêng với kết quả có mặt. Chọn chi tiết để duyệt từng yêu cầu.',pending:'Danh sách này áp dụng trước khi hết giờ đúng giờ.',duplicate:'Cảnh báo để kiểm tra, không tự kết luận gian lận. Không cộng nhóm này vào sĩ số.',unmatched:'Giữ nguyên tên đã nhập. Tên trùng trong danh sách của nhóm cũng cần bạn đối chiếu.',outside:'Lượt ngoài lịch vẫn được lưu. Bạn có thể gán thủ công vào đúng phiên.',all:'Số liệu dựa trên danh sách của nhóm của phiên, mỗi người tham gia chỉ có một kết quả chính.'};
   $('#resultTitle').textContent=titles[state.filter];$('#resultHint').textContent=hints[state.filter];
-  if(!canManage())$('#resultHint').textContent={reason:'Lý do và tình trạng duyệt do admin quản lý.',outside:'Các lượt gửi ngoài phiên của lớp.',unmatched:'Các tên chưa khớp danh sách lớp.'}[state.filter]||hints[state.filter];
-  if(d.roster_status==='empty')$('#resultHint').textContent='Phiên chưa có danh sách học viên. Lượt gửi vẫn được lưu; sau khi nhập danh sách đúng lớp, hệ thống sẽ tự khớp lại tên.';
+  if(!canManage())$('#resultHint').textContent={reason:'Lý do và tình trạng duyệt do admin quản lý.',outside:'Các lượt gửi ngoài phiên của nhóm.',unmatched:'Các tên chưa khớp danh sách nhóm.'}[state.filter]||hints[state.filter];
+  if(d.roster_status==='empty')$('#resultHint').textContent=canImport()?'Phiên chưa có danh sách người tham gia. Nhập danh sách đúng nhóm để hệ thống khớp lại tên.':'Phiên chưa có danh sách người tham gia. Liên hệ admin hoặc người được cấp quyền nhập danh sách.';
   const counts={absent:d.rows.filter(r=>['absent','excused'].includes(r.status)).length,reason:d.rows.filter(r=>r.reason).length+d.unmatched.filter(r=>r.reason).length,pending:d.counts.pending||0,duplicate:d.duplicateGroups.length,unmatched:d.unmatched.length,outside:d.outside.length,all:d.rows.length};
   for(const btn of $('#resultTabs').querySelectorAll('button')){const f=btn.dataset.filter;const names={absent:'Vắng',reason:'Có lý do',pending:'Chưa điểm danh',duplicate:'Trùng thiết bị',unmatched:'Tên không khớp',outside:'Ngoài phiên',all:'Tất cả'};btn.textContent=`${names[f]} (${counts[f]})`;btn.classList.toggle('active',f===state.filter);btn.setAttribute('aria-selected',String(f===state.filter));}
   if(state.filter==='duplicate'){
@@ -133,7 +142,7 @@ function renderResults(){
   if(['unmatched','outside'].includes(state.filter)){
     const rows=(state.filter==='outside'?d.outside:d.unmatched).filter(searchMatches);
     $('#resultTable').innerHTML=table(['Tên đã nhập','Đơn vị','Giờ gửi','Loại / lý do','Thiết bị','Kiểm tra'],rows.map(a=>[
-      `<strong>${h(a.entered_name)}</strong><small>${a.match_state==='ambiguous'?'Tên trùng cần đối chiếu':a.match_state==='outside_session'?'Chưa xác định phiên':d.roster_status==='empty'?'Chờ danh sách của phiên':'Không khớp danh sách gốc'}</small>`,h(a.entered_unit),fmt(a.received_at),
+      `<strong>${h(a.entered_name)}</strong><small>${a.match_state==='ambiguous'?'Tên trùng cần đối chiếu':a.match_state==='outside_session'?'Chưa xác định phiên':d.roster_status==='empty'?'Chờ danh sách của phiên':'Không khớp danh sách của nhóm'}</small>`,h(a.entered_unit),fmt(a.received_at),
       `${badge(a.kind==='present'?'present':'pending',a.kind==='present'?'Có mặt':'Báo vắng / muộn')}<small>${h(a.reason)}</small>`,h(a.device_id),
       canManage()?`<button data-action="reconcile" data-id="${h(a.id)}">Đối chiếu / gán lại</button>`:`<button data-action="attempt-detail" data-id="${h(a.id)}">Chi tiết</button>`
     ]));return;
@@ -143,84 +152,95 @@ function renderResults(){
   if(state.filter==='pending')rows=rows.filter(r=>r.status==='pending');
   if(state.filter==='reason')rows=rows.filter(r=>r.reason);
   rows=rows.filter(searchMatches);
-  $('#resultTable').innerHTML=table(['TT','Học viên','Trạng thái','Giờ nhận','Lý do','Thao tác'],rows.map(r=>[
+  $('#resultTable').innerHTML=table(['TT','Người tham gia','Trạng thái','Giờ nhận','Lý do','Thao tác'],rows.map(r=>[
     h(r.ordinal||''),`<strong>${h(r.name)}</strong><small>${h(r.unit)}</small>`,`${badge(r.status)}${r.duplicate_device?'<br>'+badge('duplicate','Trùng thiết bị'):''}`,
     `${fmt(r.received_at)}${r.late_minutes?`<small>Muộn ${r.late_minutes} phút</small>`:''}`,
     `${h(r.reason||'—')}${r.reason_status?'<br>'+badge(r.reason_status,reviewLabels[r.reason_status]):''}`,
     `<div class="table-actions"><button data-action="detail" data-id="${h(r.student_id)}">Chi tiết</button>${canManage()?`<button data-action="manual" data-id="${h(r.student_id)}">Ghi nhận</button>`:''}</div>`
-  ]),d.session?'Không có học viên trong nhóm này.':'Chưa có phiên để thống kê.');
+  ]),d.session?'Không có người tham gia phù hợp trong danh sách này.':'Chưa có phiên để thống kê.');
   if(state.filter==='reason'){
     const unmatched=d.unmatched.filter(a=>a.reason&&searchMatches(a));
     if(unmatched.length)$('#resultTable').innerHTML+=`<div class="table-heading"><h3>Lý do từ tên chưa khớp (${unmatched.length})</h3></div>`+table(['Tên đã nhập','Lý do','Tình trạng','Thao tác'],unmatched.map(a=>[h(a.entered_name),h(a.reason),badge(a.reason_status,reviewLabels[a.reason_status]),canManage()?`<button data-action="reconcile" data-id="${h(a.id)}">Đối chiếu trước</button>`:`<button data-action="attempt-detail" data-id="${h(a.id)}">Chi tiết</button>`]));
   }
 }
 async function openView(view){
-  if(!canManage()&&view!=='dashboard')return;
-  state.view=view;const titles={dashboard:'Tổng quan phiên',students:'Danh sách lớp',schedule:'Lịch điểm danh',settings:'Vị trí & cài đặt',data:'Dữ liệu & xóa lớp',audit:'Nhật ký thay đổi',account:'Tài khoản',viewers:'Tài khoản lớp trưởng'};
+  if(!canOpen(view))view='dashboard';
+  applyPermissions();
+  state.view=view;const titles={dashboard:'Tổng quan phiên',students:'Danh sách người tham gia',schedule:'Lịch & phiên điểm danh',settings:'Vị trí & cấu hình',data:'Quản lý dữ liệu',audit:'Nhật ký thay đổi',account:'Tài khoản',viewers:'Tài khoản quản lý nhóm'};
   updater.pause();
   $('#viewTitle').textContent=titles[view];for(const el of document.querySelectorAll('.view'))el.hidden=el.id!==`${view}View`;for(const el of document.querySelectorAll('.nav-item'))el.classList.toggle('active',el.dataset.view===view);
-  if(view==='dashboard')await loadDashboard();if(view==='students')await loadStudents();if(view==='settings'){if(state.classes.length)fillSettings();else prepareNewClass();}if(view==='data')fillDataManagement();if(view==='schedule'){$('#scheduleDate').value=$('#dashboardDate').value;fillSchedule();}if(view==='audit')await loadAudit();
+  if(view==='dashboard')await loadDashboard();if(view==='students')await loadStudents();if(view==='settings'){if(state.classes.length)fillSettings();else prepareNewClass();}if(view==='data')fillDataManagement();if(view==='schedule'){$('#scheduleDate').value=$('#dashboardDate').value;fillSchedule();fillDefaultSchedule();}if(view==='audit')await loadAudit();
   if(view==='viewers')await loadViewers();
   updateRefreshActivity();
 }
 async function loadStudents(){
-  state.students=await api('students',null,{class_id:state.classId});$('#studentCount').textContent=`Danh sách gốc · ${state.students.length} học viên`;
-  $('#studentTable').innerHTML=table(['TT','Họ và tên','Ngày sinh','Đơn vị','Thao tác'],state.students.map(s=>[h(s.ordinal||''),`<strong>${h(s.name)}</strong>`,h(s.birth_date?String(s.birth_date).slice(0,10):'—'),h(s.unit),`<button data-action="student" data-id="${h(s.id)}">Sửa</button>`]),'Chưa có danh sách. Tải file Excel để nhập học viên.');
+  const groupId=state.classId;const students=await api('students',null,{class_id:groupId});if(groupId!==state.classId)return;state.students=students;$('#studentCount').textContent=`Danh sách của nhóm · ${state.students.length} người tham gia`;
+  $('#studentTable').innerHTML=table(['TT','Họ và tên','Ngày sinh','Đơn vị','Thao tác'],state.students.map(s=>[h(s.ordinal||''),`<strong>${h(s.name)}</strong>`,h(s.birth_date?String(s.birth_date).slice(0,10):'—'),h(s.unit),canManage()?`<button data-action="student" data-id="${h(s.id)}">Sửa</button>`:'Chỉ xem']),'Chưa có danh sách. Tải file Excel để nhập người tham gia.');
 }
+function updateImportImpact(){const p=state.preview;if(!p)return;$('#importImpact').textContent=$('#importMode').value==='replace'?`Thay thế danh sách đang hoạt động của ${currentGroup()?.name||'nhóm đang chọn'} bằng ${p.total} người. Lịch sử phiên đã có lượt gửi được giữ.`:`Thêm ${p.total} người vào ${currentGroup()?.name||'nhóm đang chọn'}; giữ danh sách hiện hành.`;}
 async function preview(input){
-  state.preview=await api('preview-import',input);const p=state.preview;
-  $('#importPreview').hidden=false;$('#confirmImport').checked=false;$('#previewHeading').textContent=`${p.sheet}: ${p.total} học viên`;
+  const groupId=state.classId;const p=await api('preview-import',{...input,class_id:groupId});
+  if(groupId!==state.classId)return;state.preview=p;
+  $('#importPreview').hidden=false;$('#confirmImport').checked=false;$('#previewHeading').textContent=`${currentGroup()?.name||''} · ${p.sheet}: ${p.total} người tham gia`;
   $('#previewMessages').innerHTML=[...p.errors,...p.warnings].map(m=>`<li>${h(m)}</li>`).join('');
-  $('#previewTable').innerHTML=table(p.headers,p.rows.map(r=>[h(r.ordinal),h(r.name),h(r.birth_date||''),h(r.unit)]));$('#commitImport').disabled=p.errors.length>0;
+  $('#previewTable').innerHTML=table(p.headers,p.rows.map(r=>[h(r.ordinal),h(r.name),h(r.birth_date||''),h(r.unit)]));$('#commitImport').disabled=p.errors.length>0;updateImportImpact();
 }
 function fillSettings(){
   state.newClass=false;const c=state.classes.find(c=>c.id===state.classId);if(!c)return;
   const form=$('#settingsForm');for(const el of form.elements){if(!el.name)continue;if(el.type==='checkbox')el.checked=el.name==='apply_current'?false:!!c[el.name];else el.value=c[el.name]??'';}
-  $('#attendanceLink').textContent=`Liên kết học viên: ${location.origin}/?class=${c.slug}`;$('#locationInfo').textContent=`Phiên bản vị trí hiện tại: ${c.revision}.`;
+  $('#attendanceLink').textContent=`Liên kết người tham gia: ${location.origin}/?class=${c.slug}`;$('#locationInfo').textContent=`Phiên bản vị trí hiện tại: ${c.revision}.`;
 }
+function fillDefaultSchedule(){const c=currentGroup();if(!c)return;for(const name of ['morning_open','morning_deadline','afternoon_open','afternoon_deadline'])$('#defaultScheduleForm').elements[name].value=c[name];}
 function fillSchedule(){
   const c=state.classes.find(c=>c.id===state.classId);if(!c)return;const form=$('#scheduleForm');
   const day=$('#scheduleDate').value||today();form.elements.day.value=day;
-  let data=c;
+  let data=c;form.elements.cancelled.checked=false;
   if(state.data?.sessions?.length&&day===$('#dashboardDate').value){const [morning,afternoon]=state.data.sessions;data={morning_open:hm(morning.opens_at),morning_deadline:hm(morning.deadline_at),afternoon_open:hm(afternoon.opens_at),afternoon_deadline:hm(afternoon.deadline_at)};form.elements.cancelled.checked=morning.state==='cancelled';}
   else form.elements.cancelled.checked=false;
   for(const name of ['morning_open','morning_deadline','afternoon_open','afternoon_deadline'])form.elements[name].value=data[name];
 }
 async function loadAudit(){
   const rows=await api('audit',null,state.classId?{class_id:state.classId}:{});
-  const names={import_students:'Nhập danh sách',save_class:'Sửa cài đặt lớp',save_schedule:'Sửa lịch ngày',reconcile:'Đối chiếu tên / phiên',review_reason:'Duyệt lý do',resolve_device:'Xử lý trùng thiết bị',save_student:'Sửa học viên',sync_roster:'Đồng bộ danh sách phiên',manual_attendance:'Ghi nhận thủ công',repair_empty_roster:'Khôi phục danh sách phiên rỗng','clear-all':'Xóa toàn bộ dữ liệu','clear-class-attendance':'Xóa kết quả điểm danh của lớp','delete-class':'Xóa lớp học',viewer_create:'Cấp tài khoản lớp trưởng',viewer_assign:'Giao / đổi lớp trưởng',
-    'viewer_set-enabled':'Khóa / mở tài khoản lớp trưởng','viewer_reset-password':'Cấp lại mật khẩu lớp trưởng'};
+  const names={save_default_schedule:'Đổi khung giờ mặc định',viewer_permissions:'Cập nhật quyền quản lý nhóm',import_students:'Nhập danh sách',save_class:'Sửa cài đặt nhóm',save_schedule:'Sửa lịch ngày',reconcile:'Đối chiếu tên / phiên',review_reason:'Duyệt lý do',resolve_device:'Xử lý trùng thiết bị',save_student:'Sửa người tham gia',sync_roster:'Đồng bộ danh sách phiên',manual_attendance:'Ghi nhận thủ công',repair_empty_roster:'Khôi phục danh sách phiên rỗng','clear-all':'Xóa toàn bộ dữ liệu','clear-class-attendance':'Xóa kết quả điểm danh của nhóm','delete-class':'Xóa nhóm điểm danh',viewer_create:'Cấp tài khoản người quản lý nhóm',viewer_assign:'Giao / đổi người quản lý nhóm',
+    'viewer_set-enabled':'Khóa / mở tài khoản người quản lý nhóm','viewer_reset-password':'Cấp lại mật khẩu người quản lý nhóm'};
   $('#auditTable').innerHTML=table(['Thời điểm','Người thực hiện','Thao tác','Chi tiết'],rows.map(a=>[fmt(a.created_at),h(a.email||'Hệ thống'),h(names[a.action]||a.action),`<details><summary>Xem thay đổi</summary><pre>${h(JSON.stringify(a.details,null,2))}</pre></details>`]));
 }
 async function loadViewers(){
   state.viewers=await api('viewers');
   $('#createViewerButton').disabled=!state.classes.length;
-  $('#viewerAccounts').innerHTML=table(['Email','Lớp được giao','Trạng thái','Thao tác'],state.viewers.map(v=>[
-    h(v.email),v.classes.map(c=>h(c.name)).join(' · ')||'Chưa được giao lớp',v.enabled?'Đang hoạt động':'Đã khóa',
-    `<div class="table-actions"><button data-viewer="assign" data-id="${h(v.user_id)}">Giao / đổi lớp</button><button data-viewer="set-enabled" data-id="${h(v.user_id)}">${v.enabled?'Khóa tài khoản':'Mở khóa'}</button><button data-viewer="reset-password" data-id="${h(v.user_id)}">Cấp lại mật khẩu</button></div>`
-  ]),'Chưa có tài khoản lớp trưởng.');
+  $('#viewerAccounts').innerHTML=table(['Email','Nhóm được giao','Trạng thái','Thao tác'],state.viewers.map(v=>[
+    h(v.email),v.classes.map(c=>`${h(c.name)}<small>${c.can_import_roster?'Nhập danh sách · ':''}${c.can_edit_schedule?'Chỉnh lịch · ':''}Xem tổng quan</small>`).join(' · ')||'Chưa được giao nhóm',v.enabled?'Đang hoạt động':'Đã khóa',
+    `<div class="table-actions"><button data-viewer="assign" data-id="${h(v.user_id)}">Giao / đổi nhóm</button><button data-viewer="permissions" data-id="${h(v.user_id)}">Cấp quyền</button><button data-viewer="set-enabled" data-id="${h(v.user_id)}">${v.enabled?'Khóa tài khoản':'Mở khóa'}</button><button data-viewer="reset-password" data-id="${h(v.user_id)}">Cấp lại mật khẩu</button></div>`
+  ]),'Chưa có tài khoản người quản lý nhóm.');
 }
 function viewerClassOptions(selected=''){return state.classes.map(c=>`<option value="${h(c.id)}" ${c.id===selected?'selected':''}>${h(c.name)}</option>`).join('');}
+function permissionFields(c={}){return `<label class="checkbox"><input type="checkbox" name="can_import_roster" ${c.can_import_roster?'checked':''}>Cho nhập và đồng bộ danh sách</label><label class="checkbox"><input type="checkbox" name="can_edit_schedule" ${c.can_edit_schedule?'checked':''}>Cho chỉnh lịch ngày và khung giờ mặc định</label>`;}
 function viewerDialog(operation,id=null){
   if(!canManage())return;
   const v=state.viewers.find(v=>v.user_id===id);
   if(operation!=='create'&&!v)return;
   let body,title;
   if(operation==='create'){
-    if(!state.classes.length){notice('Tạo lớp học trước khi cấp tài khoản.',true);return;}
-    title='Cấp tài khoản lớp trưởng';
-    body=`<p class="muted">Bạn tự cung cấp email/mật khẩu cho lớp trưởng. Ứng dụng không gửi email.</p><label>Email<input type="email" name="email" autocomplete="off" required></label><label>Mật khẩu được cấp<input type="password" name="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label><label>Lớp được xem<select name="class_id">${viewerClassOptions(state.classId)}</select></label>`;
+    if(!state.classes.length){notice('Tạo nhóm điểm danh trước khi cấp tài khoản.',true);return;}
+    title='Cấp tài khoản người quản lý nhóm';
+    body=`<p class="muted">Bạn tự cung cấp email/mật khẩu cho người quản lý nhóm. Ứng dụng không gửi email.</p><label>Email<input type="email" name="email" autocomplete="off" required></label><label>Mật khẩu được cấp<input type="password" name="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label><label>Nhóm được xem<select name="class_id">${viewerClassOptions(state.classId)}</select></label>`;
   }else if(operation==='assign'){
-    title=`Giao lớp · ${v.email}`;body=`<label>Lớp được xem<select name="class_id"><option value="">Không giao lớp — thu hồi quyền xem</option>${viewerClassOptions(v.classes[0]?.id)}</select></label><p class="muted">Thay thế quyền xem hiện tại. Tài khoản không xem được các lớp khác.</p>`;
+    title=`Giao nhóm · ${v.email}`;body=`<label>Nhóm được xem<select name="class_id"><option value="">Không giao nhóm — thu hồi quyền xem</option>${viewerClassOptions(v.classes[0]?.id)}</select></label><p class="muted">Thay thế quyền xem hiện tại. Tài khoản không xem được các nhóm khác.</p>`;
+  }else if(operation==='permissions'){
+    if(!v.classes.length){notice('Giao nhóm trước khi cấp quyền.',true);return;}
+    title=`Cấp quyền · ${v.email}`;body=`<label>Nhóm được giao<select name="class_id" id="permissionGroupSelect">${v.classes.map(c=>`<option value="${h(c.id)}">${h(c.name)}</option>`).join('')}</select></label><div id="permissionFields">${permissionFields(v.classes[0])}</div>`;
   }else if(operation==='set-enabled'){
-    title=`${v.enabled?'Khóa':'Mở khóa'} · ${v.email}`;body=`<p>${v.enabled?'Tài khoản sẽ bị chặn ở yêu cầu tiếp theo; dữ liệu lớp được giữ.':'Cho phép tài khoản đăng nhập và xem lớp được giao.'}</p>`;
+    title=`${v.enabled?'Khóa':'Mở khóa'} · ${v.email}`;body=`<p>${v.enabled?'Tài khoản sẽ bị chặn ở yêu cầu tiếp theo; dữ liệu nhóm được giữ.':'Cho phép tài khoản đăng nhập và xem nhóm được giao.'}</p>`;
   }else{
-    title=`Cấp lại mật khẩu · ${v.email}`;body='<label>Mật khẩu mới được cấp<input type="password" name="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label><p class="muted">Tự chuyển mật khẩu mới cho lớp trưởng. Nếu cần chặn truy cập ngay, khóa tài khoản trước.</p>';
+    title=`Cấp lại mật khẩu · ${v.email}`;body='<label>Mật khẩu mới được cấp<input type="password" name="password" minlength="12" maxlength="1024" autocomplete="new-password" required></label><p class="muted">Tự chuyển mật khẩu mới cho người quản lý nhóm. Nếu cần chặn truy cập ngay, khóa tài khoản trước.</p>';
   }
+  if(['create','assign'].includes(operation))body+=permissionFields();
   openDialog(title,body,async values=>{
+    if(['create','assign','permissions'].includes(operation))for(const name of ['can_import_roster','can_edit_schedule'])values[name]=$('#actionForm').elements[name].checked;
     await api('save-viewer',{...values,operation,...(id?{user_id:id}:{}),...(operation==='set-enabled'?{enabled:!v.enabled}:{})});
-    closeDialog();await loadViewers();notice('Đã cập nhật tài khoản lớp trưởng.');return {handled:true};
+    closeDialog();await loadViewers();notice('Đã cập nhật tài khoản người quản lý nhóm.');return {handled:true};
   });
+  if(operation==='permissions')$('#permissionGroupSelect').addEventListener('change',event=>{$('#permissionFields').innerHTML=permissionFields(v.classes.find(c=>c.id===event.target.value));});
 }
 function openDialog(title,body,action,button='Lưu'){$('#dialogError').hidden=true;$('#dialogError').textContent='';$('#dialogTitle').textContent=title;$('#dialogBody').innerHTML=body;state.dialogAction=action;state.deletionPreview=null;$('#confirmDialog').textContent=button;$('#confirmDialog').hidden=!action;$('#confirmDialog').disabled=false;$('#confirmDialog').className='primary';if(!$('#actionDialog').open)$('#actionDialog').showModal();}
 function closeDialog(){$('#actionDialog').close();state.dialogAction=null;state.deletionPreview=null;}
@@ -228,12 +248,12 @@ function prepareNewClass(){
   state.newClass=true;$('#settingsForm').reset();const f=$('#settingsForm').elements;
   for(const [k,v] of Object.entries({latitude:13.993095,longitude:107.997195,radius:100,max_accuracy:150,morning_open:'07:00',morning_deadline:'08:00',afternoon_open:'13:30',afternoon_deadline:'14:00'}))f[k].value=v;
   f.auto_daily.checked=true;f.is_default.checked=!state.classes.length;
-  $('#attendanceLink').textContent=state.classes.length?'Nhập tên và mã liên kết lớp mới rồi lưu.':'Chưa có lớp học. Nhập thông tin và lưu để tạo lớp đầu tiên.';
+  $('#attendanceLink').textContent=state.classes.length?'Nhập tên và mã liên kết nhóm mới rồi lưu.':'Chưa có nhóm điểm danh. Nhập thông tin và lưu để tạo nhóm đầu tiên.';
   $('#locationInfo').textContent='';
 }
 function fillDataManagement(){
   const c=state.classes.find(c=>c.id===state.classId);
-  $('#deleteClassLabel').textContent=c?`${c.name} · mã liên kết ${c.slug}`:'Chưa có lớp học. Tạo lớp trong Vị trí & cài đặt.';
+  $('#deleteClassLabel').textContent=c?`${c.name} · mã liên kết ${c.slug}`:'Chưa có nhóm điểm danh. Tạo nhóm trong Vị trí & cấu hình.';
   $('#clearClassAttendanceButton').disabled=!c;$('#deleteClassButton').disabled=!c;
 }
 function syncDeleteConfirmation(){
@@ -243,14 +263,14 @@ function syncDeleteConfirmation(){
 async function openDeletionDialog(operation){
   const params={operation};if(operation!=='clear-all')params.class_id=state.classId;
   const p=await api('deletion-preview',null,params);
-  const labels={classes:'Lớp học',students:'Học viên (kể cả đã ngừng sử dụng)',sessions:'Phiên điểm danh',roster_entries:'Dòng danh sách phiên',attendance_attempts:'Lượt điểm danh / báo lý do',attempts_with_reason:'Trong đó có lý do',device_notes:'Ghi chú xử lý trùng thiết bị',audit_logs:'Nhật ký cũ',class_permissions:'Quyền xem lớp của lớp trưởng'};
+  const labels={classes:'Nhóm điểm danh',students:'Người tham gia (kể cả đã ngừng sử dụng)',sessions:'Phiên điểm danh',roster_entries:'Dòng danh sách phiên',attendance_attempts:'Lượt điểm danh / báo lý do',attempts_with_reason:'Trong đó có lý do',device_notes:'Ghi chú xử lý trùng thiết bị',audit_logs:'Nhật ký cũ',class_permissions:'Quyền xem nhóm của người quản lý nhóm'};
   openDialog(p.title,`<p class="error">Dữ liệu bị xóa vĩnh viễn khỏi ứng dụng.</p>${table(['Dữ liệu sẽ xóa','Số lượng'],Object.entries(p.will_delete).map(([key,count])=>[h(labels[key]),h(count)]))}<p class="muted">${h(p.retained)}</p><label class="checkbox"><input type="checkbox" id="acknowledgeDelete" name="acknowledged">Tôi đã kiểm tra phạm vi và hiểu dữ liệu bị xóa</label><label>Nhập chính xác: <strong>${h(p.confirmation_phrase)}</strong><input id="deleteConfirmation" name="confirmation" autocomplete="off" required></label>`,async values=>{
     try{
       await api('delete-data',{operation:p.operation,class_id:p.class_id,preview_hash:p.preview_hash,confirmation:values.confirmation,acknowledged:values.acknowledged==='on'});
     }catch(e){if(e.status===409)await openDeletionDialog(operation);throw e;}
     closeDialog();state.data=null;state.preview=null;$('#sessionSelect').innerHTML='';
     await boot();await openView(state.classes.length?'data':'settings');
-    notice(operation==='clear-class-attendance'?'Đã xóa kết quả điểm danh của lớp; danh sách học viên và lịch được giữ.':operation==='delete-class'?'Đã xóa lớp và dữ liệu liên quan.':'Đã xóa toàn bộ dữ liệu lớp học. Bạn có thể tạo lớp mới.');
+    notice(operation==='clear-class-attendance'?'Đã xóa kết quả điểm danh của nhóm; danh sách người tham gia và lịch được giữ.':operation==='delete-class'?'Đã xóa nhóm và dữ liệu liên quan.':'Đã xóa toàn bộ dữ liệu nhóm điểm danh. Bạn có thể tạo nhóm mới.');
     return {handled:true};
   },'Xác nhận xóa');
   state.deletionPreview=p;$('#confirmDialog').className='danger';syncDeleteConfirmation();
@@ -272,8 +292,8 @@ async function actionClick(event){
     const target=a.session_id||state.data.session?.id||sessions[0].id;
     const d=await api('dashboard',null,{class_id:state.classId,day:$('#dashboardDate').value,session_id:target});
     const options=d.rows.map(r=>`<option value="${h(r.student_id)}">${h(r.name)} · ${h(r.unit)}</option>`).join('');
-    openDialog('Đối chiếu lượt gửi',`<div class="history"><strong>${h(a.entered_name)}</strong><p>${h(a.entered_unit)}</p><small>${fmt(a.received_at)} · ${h(a.device_id)}</small></div><label>Phiên<select name="session_id" id="reconcileSession">${sessions.map(s=>`<option value="${h(s.id)}" ${s.id===target?'selected':''}>${h(s.name)}</option>`).join('')}</select></label><label>Học viên gốc<select name="student_id" id="reconcileStudent"><option value="">Người ngoài danh sách — không liên kết học viên</option>${options}</select></label><label>Lý do đối chiếu<textarea name="note" required rows="3"></textarea></label>`,async values=>{await api('reconcile',{attempt_id:id,...values});});
-    $('#reconcileSession').addEventListener('change',event=>run(null,async()=>{const d=await api('dashboard',null,{class_id:state.classId,day:$('#dashboardDate').value,session_id:event.target.value});$('#reconcileStudent').innerHTML='<option value="">Người ngoài danh sách — không liên kết học viên</option>'+d.rows.map(r=>`<option value="${h(r.student_id)}">${h(r.name)} · ${h(r.unit)}</option>`).join('');}));return;
+    openDialog('Đối chiếu lượt gửi',`<div class="history"><strong>${h(a.entered_name)}</strong><p>${h(a.entered_unit)}</p><small>${fmt(a.received_at)} · ${h(a.device_id)}</small></div><label>Phiên<select name="session_id" id="reconcileSession">${sessions.map(s=>`<option value="${h(s.id)}" ${s.id===target?'selected':''}>${h(s.name)}</option>`).join('')}</select></label><label>Người tham gia gốc<select name="student_id" id="reconcileStudent"><option value="">Người ngoài danh sách — không liên kết người tham gia</option>${options}</select></label><label>Lý do đối chiếu<textarea name="note" required rows="3"></textarea></label>`,async values=>{await api('reconcile',{attempt_id:id,...values});});
+    $('#reconcileSession').addEventListener('change',event=>run(null,async()=>{const d=await api('dashboard',null,{class_id:state.classId,day:$('#dashboardDate').value,session_id:event.target.value});$('#reconcileStudent').innerHTML='<option value="">Người ngoài danh sách — không liên kết người tham gia</option>'+d.rows.map(r=>`<option value="${h(r.student_id)}">${h(r.name)} · ${h(r.unit)}</option>`).join('');}));return;
   }
   if(action==='detail'){
     const r=state.data.rows.find(r=>r.student_id===id);
@@ -287,7 +307,7 @@ async function actionClick(event){
   }
 }
 function editStudent(s=null){
-  openDialog(s?'Sửa học viên':'Thêm học viên',`<label>TT<input type="number" name="ordinal" min="1" value="${h(s?.ordinal||'')}"></label><label>Họ và tên<input name="name" required value="${h(s?.name||'')}"></label><label>Ngày sinh<input type="date" name="birth_date" value="${h(s?.birth_date?String(s.birth_date).slice(0,10):'')}"></label><label>Đơn vị<input name="unit" value="${h(s?.unit||'')}"></label>${s?'<label class="checkbox"><input name="inactive" type="checkbox">Ngừng sử dụng trong danh sách hiện hành</label>':''}<p class="muted">Sửa danh sách gốc không tự sửa danh sách của phiên đã có lượt gửi. Dùng Đồng bộ nếu muốn áp dụng cho phiên.</p>`,async values=>{await api('save-student',{class_id:state.classId,id:s?.id,...values,active:!values.inactive});await loadStudents();});
+  openDialog(s?'Sửa người tham gia':'Thêm người tham gia',`<label>TT<input type="number" name="ordinal" min="1" value="${h(s?.ordinal||'')}"></label><label>Họ và tên<input name="name" required value="${h(s?.name||'')}"></label><label>Ngày sinh<input type="date" name="birth_date" value="${h(s?.birth_date?String(s.birth_date).slice(0,10):'')}"></label><label>Đơn vị<input name="unit" value="${h(s?.unit||'')}"></label>${s?'<label class="checkbox"><input name="inactive" type="checkbox">Ngừng sử dụng trong danh sách hiện hành</label>':''}<p class="muted">Sửa danh sách của nhóm không tự sửa danh sách của phiên đã có lượt gửi. Dùng Đồng bộ nếu muốn áp dụng cho phiên.</p>`,async values=>{await api('save-student',{class_id:state.classId,id:s?.id,...values,active:!values.inactive});await loadStudents();});
 }
 $('#checkViewerAuthButton').addEventListener('click',()=>run($('#checkViewerAuthButton'),async()=>{const result=await api('viewer-auth-status');notice(result.message);}));
 $('#createViewerButton').addEventListener('click',()=>viewerDialog('create'));
@@ -296,7 +316,7 @@ $('#refreshPermissions').addEventListener('click',()=>run($('#refreshPermissions
 $('#loginForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{$('#loginError').textContent='';try{await api('login',Object.fromEntries(new FormData(event.target)),{},false);event.target.elements.password.value='';await boot();}catch(e){$('#loginError').textContent=e.message;}});});
 $('#logoutButton').addEventListener('click',()=>run($('#logoutButton'),async()=>{await api('logout',{});showLogin();}));
 for(const btn of document.querySelectorAll('.nav-item'))btn.addEventListener('click',()=>run(null,()=>openView(btn.dataset.view)));
-$('#classSelect').addEventListener('change',event=>run(null,async()=>{state.classId=event.target.value;state.data=null;state.preview=null;$('#importPreview').hidden=true;$('#sessionSelect').innerHTML='';await loadDashboard();await setupRealtime();await openView(state.view);}));
+$('#classSelect').addEventListener('change',event=>run(null,async()=>{state.classId=event.target.value;state.data=null;state.preview=null;state.students=[];$('#studentTable').innerHTML='';closeDialog();applyPermissions();$('#importPreview').hidden=true;$('#sessionSelect').innerHTML='';await loadDashboard();await setupRealtime();await openView(state.view);}));
 $('#dashboardDate').addEventListener('change',()=>{$('#sessionSelect').innerHTML='';run(null,()=>loadDashboard());});
 $('#sessionSelect').addEventListener('change',()=>run(null,()=>loadDashboard()));
 $('#refreshDashboard').addEventListener('click',()=>run($('#refreshDashboard'),()=>loadDashboard()));
@@ -306,15 +326,17 @@ $('#resultTable').addEventListener('click',event=>run(null,()=>actionClick(event
 $('#closeDialog').addEventListener('click',closeDialog);$('#cancelDialog').addEventListener('click',closeDialog);
 $('#actionForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{const action=state.dialogAction;if(!action)return;const values=Object.fromEntries(new FormData(event.target));const result=await action(values);if(result?.handled)return;closeDialog();await loadDashboard();notice('Đã lưu thay đổi.');});});
 $('#addStudentButton').addEventListener('click',()=>editStudent());
-$('#templateButton').addEventListener('click',()=>{location.href='/api?action=template';});
+$('#templateButton').addEventListener('click',()=>{location.href=`/api?${new URLSearchParams({action:'template',class_id:state.classId})}`;});
 $('#exportButton').addEventListener('click',()=>{location.href=`/api?${new URLSearchParams({action:'export',class_id:state.classId,day:$('#dashboardDate').value,session_id:$('#sessionSelect').value})}`;});
 $('#rosterFile').addEventListener('change',event=>run(null,async()=>{const file=event.target.files[0];if(!file)return;if(file.size>2*1024*1024)throw new Error('File tối đa 2 MB.');const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Không đọc được file.'));reader.readAsDataURL(file);});await preview({filename:file.name,base64});}));
+$('#importMode').addEventListener('change',updateImportImpact);
 $('#previewPaste').addEventListener('click',()=>run($('#previewPaste'),()=>preview({paste:$('#rosterPaste').value})));
-$('#commitImport').addEventListener('click',()=>run($('#commitImport'),async()=>{if(!state.preview||state.preview.errors.length)throw new Error('Kiểm tra lỗi nhập danh sách.');if(!$('#confirmImport').checked)throw new Error('Đánh dấu xác nhận sau khi kiểm tra danh sách.');const result=await api('import',{class_id:state.classId,rows:state.preview.rows,mode:$('#importMode').value});$('#importPreview').hidden=true;state.preview=null;await loadStudents();await loadDashboard();notice(`Đã nhập ${result.imported} học viên.${result.repaired_sessions ? ` Đã khôi phục ${result.repaired_sessions} phiên rỗng và khớp lại ${result.linked_attempts} lượt gửi.` : " Phiên đã có danh sách giữ lịch sử; dùng Đồng bộ nếu cần cập nhật."}`);}));
-$('#syncRosterButton').addEventListener('click',()=>{if(!state.data?.session){notice('Chọn một phiên trong Tổng quan trước.',true);return;}const s=state.data.session;openDialog(`Đồng bộ danh sách · ${s.name}`,`<p>Áp dụng danh sách gốc hiện hành cho phiên ${h(s.name)} ngày ${h($('#dashboardDate').value)}. Tên khớp chính xác và duy nhất sẽ được liên kết lại; tên gần giống vẫn cần kiểm tra. Học viên ngừng sử dụng đã có lượt gửi vẫn giữ trong lịch sử.</p><label>Lý do đồng bộ<textarea name="note" required rows="3"></textarea></label>`,async values=>{await api('sync-roster',{session_id:s.id,note:values.note});});});
+$('#commitImport').addEventListener('click',()=>run($('#commitImport'),async()=>{if(!state.preview||state.preview.class_id!==state.classId||state.preview.errors.length)throw new Error('Kiểm tra lỗi nhập danh sách.');if(!$('#confirmImport').checked)throw new Error('Đánh dấu xác nhận sau khi kiểm tra danh sách.');const groupId=state.classId,rows=state.preview.rows,mode=$('#importMode').value;const result=await api('import',{class_id:groupId,rows,mode});if(groupId!==state.classId)return;$('#importPreview').hidden=true;state.preview=null;await loadStudents();await loadDashboard();notice(`Đã nhập ${result.imported} người tham gia.${result.repaired_sessions ? ` Đã khôi phục ${result.repaired_sessions} phiên rỗng và khớp lại ${result.linked_attempts} lượt gửi.` : " Phiên đã có danh sách giữ lịch sử; dùng Đồng bộ nếu cần cập nhật."}`);}));
+$('#syncRosterButton').addEventListener('click',()=>{if(!state.data?.session){notice('Chọn một phiên trong Tổng quan trước.',true);return;}const s=state.data.session;openDialog(`Đồng bộ danh sách · ${s.name}`,`<p>Áp dụng danh sách của nhóm hiện hành cho phiên ${h(s.name)} ngày ${h($('#dashboardDate').value)}. Tên khớp chính xác và duy nhất sẽ được liên kết lại; tên gần giống vẫn cần kiểm tra. Người tham gia ngừng sử dụng đã có lượt gửi vẫn giữ trong lịch sử.</p><label>Lý do đồng bộ<textarea name="note" required rows="3"></textarea></label>`,async values=>{await api('sync-roster',{session_id:s.id,note:values.note});});});
 $('#scheduleDate').addEventListener('change',()=>run(null,async()=>{$('#dashboardDate').value=$('#scheduleDate').value;$('#sessionSelect').innerHTML='';await loadDashboard();fillSchedule();}));
 $('#scheduleForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{const form=event.target,input={...Object.fromEntries(new FormData(form)),class_id:state.classId,cancelled:form.elements.cancelled.checked};try{await api('save-schedule',input);}catch(e){if(e.status!==409)throw e;openDialog('Xác nhận đổi lịch đã có dữ liệu',`<p>${h(e.message)}</p><p>Giờ nhận gốc được giữ. Các lượt gửi sẽ được phân lại theo lịch mới và kết quả đi muộn được tính lại; thao tác có nhật ký.</p>`,async()=>{await api('save-schedule',{...input,confirm_changes:true});},'Xác nhận đổi lịch');return;}$('#dashboardDate').value=input.day;$('#sessionSelect').innerHTML='';await loadDashboard();notice('Đã lưu lịch ngày này.');});});
-$('#settingsForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{const form=event.target;const data=Object.fromEntries(new FormData(form));for(const key of ['is_default','auto_daily','apply_current'])data[key]=form.elements[key].checked;if(!state.newClass)data.id=state.classId;const c=await api('save-class',data);state.classId=c.id;await boot();await openView('settings');notice('Đã lưu cài đặt. Phiên hiện có giữ lịch giờ; dùng Lịch điểm danh để chỉnh riêng ngày.');});});
+$('#defaultScheduleForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{const groupId=state.classId;const result=await api('save-default-schedule',{...Object.fromEntries(new FormData(event.target)),class_id:groupId});Object.assign(state.classes.find(c=>c.id===groupId),result);if(groupId===state.classId){fillDefaultSchedule();if(canManage())fillSettings();}notice('Đã lưu khung mặc định. Lịch riêng và phiên đã tạo được giữ nguyên.');});});
+$('#settingsForm').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{const form=event.target;const data=Object.fromEntries(new FormData(form));for(const key of ['is_default','auto_daily','apply_current'])data[key]=form.elements[key].checked;if(!state.newClass)data.id=state.classId;const c=await api('save-class',data);state.classId=c.id;await boot();await openView('settings');notice('Đã lưu cài đặt. Phiên hiện có giữ lịch giờ; dùng Lịch & phiên điểm danh để chỉnh riêng ngày.');});});
 $('#newClassButton').addEventListener('click',prepareNewClass);
 $('#clearClassAttendanceButton').addEventListener('click',()=>run($('#clearClassAttendanceButton'),()=>openDeletionDialog('clear-class-attendance')));
 $('#deleteClassButton').addEventListener('click',()=>run($('#deleteClassButton'),()=>openDeletionDialog('delete-class')));

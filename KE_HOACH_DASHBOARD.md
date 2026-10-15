@@ -1,6 +1,6 @@
-# Kế hoạch dashboard điểm danh theo phiên
+# Kế hoạch nâng cấp phần mềm điểm danh chung
 
-Ngày lập: 13/10/2026. Repo đã đọc: https://github.com/ludarao/diemdanh, commit 44b1ade. Kế hoạch đã được triển khai thành mã nguồn cục bộ. Theo lựa chọn của người dùng, chưa tạo project Supabase/Vercel và chưa deploy cloud; hướng dẫn cấu hình tại `docs/HUONG_DAN_TRIEN_KHAI.md`.
+Ngày lập: 13/10/2026. Cập nhật kế hoạch: 15/10/2026. Repo: https://github.com/ludarao/diemdanh; phần khảo sát ban đầu dùng commit 44b1ade. Bản điểm danh PostgreSQL/Supabase, admin và phân quyền chỉ xem theo nhóm đã được triển khai trên Vercel. Mục 12 và 13 được thực hiện trong bản nâng cấp quyền theo nhóm và cách gọi sản phẩm. Hướng dẫn cấu hình tại `docs/HUONG_DAN_TRIEN_KHAI.md`.
 
 ## 1. Kết quả xem mã nguồn
 
@@ -186,3 +186,95 @@ Chưa ước tính chi phí hosting hoặc cam kết tốc độ trước khi bi
 - Bổ sung Dữ liệu & xóa lớp: xóa kết quả của từng lớp giữ danh sách/lịch/cài đặt; xóa lớp cùng toàn bộ dữ liệu lớp; hoặc xóa tất cả dữ liệu lớp học. Giữ tài khoản admin và cấu trúc hệ thống. Có xem trước số lượng, nhập câu xác nhận, kiểm tra dữ liệu thay đổi và transaction hoàn tác khi lỗi; cho tạo lớp mới sau khi xóa lớp cuối cùng.
 
 - Triển khai lớp trưởng chỉ đọc: bảng class_viewers, vai trò trên admin_users, migration 003/004, kiểm tra API/RLS theo lớp; khóa/gỡ quyền kiểm tra mỗi request. Lớp trưởng không sửa, duyệt, xuất CSV hoặc xóa; chỉ xem chi tiết và lọc dashboard. Giữ giao diện học viên gốc.
+
+
+## 12. Kế hoạch mở thêm quyền cho người quản lý nhóm (đã thực hiện)
+
+Người dùng yêu cầu người quản lý nhóm được nhập danh sách nhóm được giao, chỉnh lịch từng ngày và khung giờ mặc định. Giữ bố cục giao diện người tham gia hiện tại, cập nhật câu chữ theo thuật ngữ chung và quyền quản trị toàn ứng dụng của admin.
+
+### Quyền theo từng nhóm được giao
+
+- Xem Tổng quan: giữ quyền hiện tại.
+- Nhập danh sách: admin có thể bật/tắt. Cho xem danh sách, tải mẫu, xem trước Excel/CSV/dán bảng, nhập thêm/thay thế, và đồng bộ vào phiên của đúng nhóm sau xác nhận. Thêm/sửa/ngừng sử dụng từng người tham gia bằng tay vẫn dành cho admin trong phạm vi bản này.
+- Chỉnh lịch: admin có thể bật/tắt. Cho chỉnh giờ sáng/chiều riêng từng ngày và bốn mốc giờ mặc định của đúng nhóm. Hủy/mở lại ngày nghỉ giữ cho admin trong phạm vi bản này.
+- Duyệt lý do, sửa/gán lại kết quả, ghi nhận thủ công, xử lý thiết bị, xuất CSV, GPS/bán kính, đổi tên/mã/default nhóm, tạo/xóa nhóm, xóa dữ liệu và quản lý tài khoản vẫn dành cho admin.
+- Tài khoản/nhóm khác giữ nguyên giới hạn. Tài khoản chưa được bật hai quyền vẫn chỉ xem.
+
+### Database và API
+
+1. Thêm migration với `can_import_roster` và `can_edit_schedule` trên `class_viewers`, mặc định false cho các liên kết hiện có. Admin quản lý quyền khi cấp/giao nhóm và có thể điều chỉnh riêng sau đó. Không đổi tài khoản Supabase, không cần thêm dịch vụ hoặc khóa.
+2. Thay kiểm tra một vai trò chung bằng kiểm tra quyền theo thao tác và nhóm. Các thao tác đọc/nhập danh sách, sửa lịch phải kiểm tra nhóm được giao và quyền tương ứng. Gửi kèm class_id khi xem trước nhập; kiểm tra lại trước lưu. Đồng bộ dùng session_id phải tìm nhóm của phiên ở server để kiểm tra, không tin class_id do trình duyệt gửi. Thu hồi quyền phải có hiệu lực ở yêu cầu mới và được kiểm tra trước khi ghi dữ liệu.
+3. Thêm API chỉ lưu bốn mốc giờ mặc định. Không mở `save-class` cho người quản lý nhóm vì API đó hiện sửa cả GPS/bán kính, tên/mã và nhóm mặc định. Lịch mặc định mới phục vụ ngày/phiên tự tạo sau đó; lịch riêng hoặc phiên đã tạo được giữ nguyên, cần chỉnh riêng ngày khi muốn thay.
+4. Tiếp tục ghi nhật ký người/nhóm/thời điểm và thay đổi. Giữ ghi qua API server; không mở quyền ghi trực tiếp cho authenticated trong RLS. Chính sách đọc theo nhóm hiện có tiếp tục sử dụng.
+
+### Giao diện
+
+- Tài khoản người quản lý nhóm ở admin: thêm hai tùy chọn “Cho nhập danh sách” và “Cho chỉnh lịch”. Hiển thị quyền đang được cấp trong danh sách tài khoản.
+- Người quản lý nhóm được cấp quyền sẽ thấy thêm Danh sách nhóm và/hoặc Lịch điểm danh. Lịch có phần khung mặc định và lịch riêng ngày; không hiển thị các mục cài đặt vị trí.
+- Chuyển nhóm phải cập nhật nút và quyền theo đúng nhóm, xóa bản xem trước nhập cũ. Hộp xác nhận nhập cần hiển thị tên nhóm và số người tham gia bị ảnh hưởng.
+- Tiếp tục bảo toàn danh sách phiên đã có lượt gửi; đồng bộ được xác nhận riêng. Khi đổi lịch có lượt gửi, xem số lượt chịu ảnh hưởng và xác nhận việc phân lại phiên/tính lại đúng giờ, muộn. Giờ gửi gốc được giữ.
+
+### Kiểm thử và triển khai
+
+- Kiểm thử từng tổ hợp chỉ xem/nhập danh sách/chỉnh lịch/cả hai; quyền admin giữ nguyên.
+- Người quản lý nhóm A không thể đọc/ghi B bằng đổi class_id, session_id hoặc gửi payload có cài đặt GPS, tên nhóm hay vai trò admin. Bật quyền chỉnh mặc định không cho gọi save-class.
+- Nhập thêm/thay thế và đồng bộ chỉ tác động đúng nhóm; chuyển nhóm giữa xem trước và lưu hoặc bị thu hồi quyền không làm nhập nhầm.
+- Chỉnh mặc định giữ lịch riêng/phiên đã tạo, chỉnh riêng một ngày không làm đổi mặc định; lịch có dữ liệu vẫn có xác nhận và nhật ký.
+- Chạy kiểm thử, build và QA bằng dữ liệu giả trước; chạy migration rồi deploy. Admin bật quyền cho các người quản lý nhóm hiện có sau khi triển khai.
+
+Đánh giá: mức thay đổi vừa. Tái sử dụng được parser Excel/CSV, nhập danh sách, lịch ngày và hệ thống nhật ký; phần cần làm thêm tập trung ở quyền theo nhóm, API giờ mặc định, giao diện cấp quyền và kiểm thử chống vượt quyền. Đã thực hiện migration 005, kiểm tra quyền API/transaction, API giờ mặc định và giao diện cấp quyền. Quyền mới vẫn tắt cho các tài khoản cũ đến khi admin bật.
+
+
+## 13. Chuyển cách gọi sản phẩm thành phần mềm điểm danh chung (đã thực hiện)
+
+Người dùng sẽ sử dụng ứng dụng cho nhiều mục đích ngoài lớp học. Tên sản phẩm thống nhất là **Điểm danh**; mô tả là **Hệ thống điểm danh và quản lý người tham gia**. Đơn vị tổ chức dùng tên chung **Nhóm điểm danh**, có thể là lớp học, bộ phận, nhóm làm việc, đoàn tham gia hoặc nhóm của một hoạt động. Một phiên là một lần/khung thời gian điểm danh của nhóm. Việc đổi thuật ngữ không tự bổ sung chức năng quản lý sự kiện, phân ca hay quy trình mới.
+
+Các yêu cầu trong mục 12 áp dụng cho người quản lý nhóm và nhóm được giao. Những mô tả lớp học/lớp trưởng ở phần lịch sử của kế hoạch phản ánh bản cũ; thuật ngữ mới của mục này là chuẩn cho lần cập nhật sắp tới.
+
+### Thuật ngữ và nhãn thống nhất
+
+| Nhãn/cách gọi hiện tại | Nhãn/cách gọi mới |
+| --- | --- |
+| Quản trị lớp học | Quản lý điểm danh |
+| Lớp / Chọn lớp | Nhóm điểm danh / Chọn nhóm |
+| Tên lớp / Mã liên kết lớp | Tên nhóm / Mã liên kết nhóm |
+| Lớp mặc định của trang điểm danh chung | Nhóm mặc định của trang điểm danh chung |
+| Học viên | Người tham gia |
+| Sĩ số | Tổng số người trong danh sách phiên |
+| Danh sách lớp | Danh sách người tham gia |
+| Danh sách gốc | Danh sách của nhóm |
+| Lớp trưởng | Người quản lý nhóm |
+| Tài khoản lớp trưởng | Tài khoản quản lý nhóm |
+| Giao / đổi lớp | Giao / đổi nhóm |
+| Lịch điểm danh | Lịch & phiên điểm danh |
+| Vị trí & cài đặt | Vị trí & cấu hình |
+| Cài đặt lớp & vị trí | Cấu hình nhóm & vị trí điểm danh |
+| Dữ liệu & xóa lớp | Quản lý dữ liệu |
+| Xóa lớp học | Xóa nhóm điểm danh |
+| Trang điểm danh học viên | Trang điểm danh |
+| Ngày nghỉ / hủy cả hai phiên | Không tổ chức điểm danh ngày này |
+
+Giữ các từ chung đã phù hợp như Họ và tên, Đơn vị, Có mặt, Vắng, Đi muộn, Lý do và Trùng thiết bị. Sáng/Chiều vẫn là hai phiên hiện tại; việc thêm số phiên hoặc tên phiên tùy ý là yêu cầu riêng nếu cần sau này. Giờ mặc định hiện có được giữ khi cập nhật cách gọi.
+
+### Câu chữ và hướng dẫn
+
+- Rà soát tiêu đề trình duyệt, thương hiệu, menu, bộ lọc, nhãn biểu mẫu, nút, placeholder, tooltip, aria-label, thông báo lỗi/thành công, nội dung rỗng, hộp xác nhận và nhật ký hiển thị.
+- Viết hướng dẫn theo hành động: “Chọn nhóm cần nhập danh sách”; “Danh sách này chỉ được lưu vào nhóm đang chọn”; “Người quản lý chỉ thao tác trong nhóm được giao và theo quyền admin cấp”.
+- Giải thích phiên là khoảng thời gian điểm danh. Phân biệt khung mặc định với lịch riêng ngày; đổi khung mặc định không thay lịch riêng/phiên đã tạo. Thay hướng dẫn “chỉ xem” cố định bằng hướng dẫn phù hợp các quyền thực tế được cấp ở mục 12.
+- Hướng dẫn nhập danh sách nêu rõ Excel/CSV hoặc dán bảng, xem trước, thêm/thay thế và đồng bộ vào phiên. Họ và tên là trường bắt buộc; Ngày sinh và Đơn vị tiếp tục cho phép để trống theo khả năng hiện có. Không ép người dùng ngoài giáo dục phải nhập ngày sinh, không bỏ dữ liệu ngày sinh cũ.
+- Mẫu tải xuống và tên file xuất dùng từ “điểm danh/người tham gia”; giữ khả năng đọc mẫu Excel/CSV bốn cột cũ. Tên mẫu mới dự kiến MAU_DS_DIEM_DANH.csv.
+- Hộp xác nhận xóa nêu chính xác nhóm, số người/lượt/phiên bị ảnh hưởng, dữ liệu giữ lại và tính không hoàn tác; câu xác nhận dùng “XÓA NHÓM …” hoặc “XÓA ĐIỂM DANH …”.
+- Cập nhật README, hướng dẫn triển khai/sử dụng và ví dụ sang nhóm điểm danh chung, với ví dụ lớp học, họp, tập huấn hoặc nhóm làm việc. Không hiển thị thuật ngữ database hoặc mã phân quyền cho người dùng nếu không cần thiết để thao tác.
+
+### Giữ tương thích và giao diện
+
+- Giữ bố cục, màu sắc, cách nhập và luồng gửi điểm danh đã quen. Người dùng đã yêu cầu đổi nhãn/câu chữ, nên HTML có thể đổi phần văn bản; kiểm thử giữ nguyên từng byte HTML gốc cần thay bằng kiểm tra thay đổi có kiểm soát về nội dung và QA bố cục. CSS gốc được giữ nếu không có nhu cầu xử lý nhãn mới dài hơn.
+- Không đổi hàng loạt tên bảng classes/students/class_viewers hoặc ID trong database chỉ để đổi tên gọi. Không sửa tên nhóm do người dùng đã đặt (ví dụ “Lớp học”, “Lớp 2”) một cách tự động.
+- Tiếp tục hỗ trợ đường dẫn ?class=... và mã liên kết đang dùng; chữ “class” trong URL là chi tiết tương thích kỹ thuật. Trong bản đổi câu chữ không bắt buộc chuyển sang ?group=...; nếu bổ sung sau thì vẫn giữ đường dẫn cũ hoạt động.
+- Giữ tài khoản, liên kết phân quyền, dữ liệu và lịch sử hiện có. RLS/API vẫn giới hạn người quản lý trong nhóm được giao.
+
+### Thứ tự và kiểm tra
+
+Thực hiện cùng đợt bổ sung quyền ở mục 12: chốt bảng thuật ngữ → cập nhật API/thông báo và giao diện → cập nhật mẫu/tài liệu → kiểm thử quyền và đối chiếu bố cục. Kiểm tra nhãn dài ở màn hình nhỏ, đồng nhất cách gọi giữa admin/trang điểm danh/CSV, tương thích mẫu và URL cũ, và không còn hướng dẫn “chỉ xem” khi tài khoản đã được cấp quyền nhập/chỉnh lịch.
+
+Đánh giá: phần bổ sung chủ yếu là rà soát nội dung và QA giao diện. Việc đổi thuật ngữ không cần migration đổi tên dữ liệu; migration mới của mục 12 vẫn chỉ phục vụ cấp quyền. Đã chuẩn hóa câu chữ trong trang điểm danh, admin, API/thông báo, mẫu và tài liệu; giữ cấu trúc trang/CSS và URL cũ.
